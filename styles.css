@@ -164,6 +164,38 @@ hr.sep{border:none; border-top:1px solid var(--line); margin:14px 0}
   background:var(--card2); color:var(--ink); border:1.5px solid var(--accent)}
 .tapbtn .big{display:block; font-size:2rem; font-variant-numeric:tabular-nums}
 
+/* segmented single-select controls */
+.seg{display:flex; gap:6px; flex-wrap:wrap}
+.seg button{flex:1; min-width:64px; background:var(--card2); color:var(--ink);
+  border:1px solid var(--line); border-radius:10px; padding:11px 8px; font-size:.9rem}
+.seg button.on{background:var(--accent); color:var(--accent-ink); border-color:var(--accent)}
+
+/* dim mode for the breathing circle (sensitive eyes) — never brightens on inhale */
+.overlay.dim .circle{box-shadow:none; background:radial-gradient(circle at 50% 40%, #436b62, #2c4a44); opacity:.85}
+
+/* private mode — blur sensitive on-screen content until hovered/focused */
+body.private #logList,
+body.private #prepSummary,
+body.private #trends,
+body.private #emergCard{ filter:blur(7px); transition:filter .15s }
+body.private #logList:hover,
+body.private #prepSummary:hover,
+body.private #trends:hover,
+body.private #emergCard:hover,
+body.private #logList:focus-within,
+body.private #prepSummary:focus-within{ filter:none }
+
+/* print: show only the printable summary */
+#printArea{display:none}
+@media print{
+  body{padding:0}
+  body > *{display:none !important}
+  #printArea{display:block !important; padding:0; color:#000}
+  #printArea h1{font-size:18px; margin:0 0 8px}
+  #printArea h2{font-size:14px; margin:14px 0 4px}
+  #printArea pre{white-space:pre-wrap; font:12px/1.4 monospace}
+}
+
 /* emergency card */
 .emerg{border:1px solid var(--warn-line); background:var(--warn-bg); color:var(--warn-ink);
   border-radius:12px; padding:12px 14px; font-size:.9rem}

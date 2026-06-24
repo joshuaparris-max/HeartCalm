@@ -27,7 +27,15 @@ export function logsToText(logs, FLAG_LABEL){
     const d = new Date(e.ts).toLocaleString();
     let s = '• ' + d;
     if(e.flags && e.flags.length) s += '\n  Symptoms: ' + e.flags.map(f => FLAG_LABEL[f] || f).join(', ');
-    if(e.pulse) s += '\n  Pulse: ' + e.pulse;
+    if(e.duration) s += '\n  Duration: ' + e.duration;
+    if(e.rhythm) s += '\n  Rhythm: ' + e.rhythm;
+    if(e.context) s += '\n  When: ' + e.context;
+    if(e.pulse) s += '\n  Pulse before: ' + e.pulse;
+    if(e.pulseAfter) s += '\n  Pulse after: ' + e.pulseAfter;
+    if(e.activity) s += '\n  Doing before: ' + e.activity;
+    if(e.helped) s += '\n  Breathing helped: ' + e.helped;
+    if(e.coughTiming && e.coughTiming !== 'none') s += '\n  Cough timing: ' + e.coughTiming;
+    if(e.ventolinRecent) s += '\n  Ventolin in last 4h: yes';
     if(e.stress !== '' && e.stress != null) s += '\n  Stress: ' + e.stress + '/10';
     if(e.triggers) s += '\n  Triggers: ' + e.triggers;
     if(e.note) s += '\n  Note: ' + e.note;
@@ -35,15 +43,21 @@ export function logsToText(logs, FLAG_LABEL){
   }).join('\n');
 }
 
+export const CSV_HEAD = ['timestamp','symptoms','duration','rhythm','context',
+  'pulse_before','pulse_after','activity','breathing_helped','cough_timing',
+  'ventolin_recent','stress','triggers','note'];
+
 export function logsToCSV(logs, FLAG_LABEL){
-  const head = ['timestamp','symptoms','pulse','stress','triggers','note'];
   const rows = logs.map(e => [
     new Date(e.ts).toISOString(),
     (e.flags || []).map(f => FLAG_LABEL[f] || f).join('; '),
-    e.pulse ?? '', e.stress ?? '', e.triggers ?? '',
+    e.duration ?? '', e.rhythm ?? '', e.context ?? '',
+    e.pulse ?? '', e.pulseAfter ?? '', e.activity ?? '',
+    e.helped ?? '', e.coughTiming ?? '', e.ventolinRecent ? 'yes' : '',
+    e.stress ?? '', e.triggers ?? '',
     String(e.note || '').replace(/\n/g, ' '),
   ]);
-  return [head, ...rows]
+  return [CSV_HEAD, ...rows]
     .map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(','))
     .join('\n');
 }
@@ -61,6 +75,55 @@ export function aggregatePrep(logs, care, RED){
     withVent: has('ventolin'),
     careCount: care.length,
   };
+}
+
+/* Most-common free-text triggers across logs (lower-cased, split on , ; /). */
+export function topTriggers(logs, n){
+  const counts = {};
+  logs.forEach(e => {
+    String(e.triggers || '').split(/[,;/]+/).map(s => s.trim().toLowerCase()).filter(Boolean)
+      .forEach(t => { counts[t] = (counts[t] || 0) + 1; });
+  });
+  return Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, n).map(([trigger, count]) => ({ trigger, count }));
+}
+
+/* Richer aggregate for the GP summary. nowMs lets the 7-day window be deterministic. */
+export function gpStats(logs, care, RED, nowMs){
+  const base = aggregatePrep(logs, care, RED);
+  const day = 86400000;
+  return Object.assign(base, {
+    last7: logs.filter(e => e.ts >= nowMs - 7 * day).length,
+    avgStress: average(logs.map(e => e.stress)),
+    avgPulse: average(logs.map(e => e.pulse)),
+    ventolinRecent: logs.filter(e => e.ventolinRecent).length,
+    irregular: logs.filter(e => e.rhythm === 'irregular').length,
+    onExertion: logs.filter(e => e.context === 'on exertion').length,
+    helped: logs.filter(e => e.helped === 'yes' || e.helped === 'partly').length,
+    triggers: topTriggers(logs, 5),
+  });
+}
+
+/* Build a daily-repeating iCalendar so reminders can live in the user's real
+   calendar (which fires reliably even when the app is closed). dtstartDate is
+   a 'YYYYMMDD' base day, passed in to keep this deterministic/testable. */
+function icsEscape(s){ return String(s).replace(/([\\;,])/g, '\\$1').replace(/\n/g, '\\n'); }
+export function icsForReminders(reminders, dtstartDate){
+  const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Calm//Reminders//EN', 'CALSCALE:GREGORIAN'];
+  reminders.filter(r => r.on).forEach(r => {
+    const [h, m] = String(r.time).split(':');
+    const dt = `${dtstartDate}T${h}${m}00`;
+    lines.push(
+      'BEGIN:VEVENT',
+      `UID:${r.id}@calm.local`,
+      `DTSTART:${dt}`,
+      'RRULE:FREQ=DAILY',
+      `SUMMARY:${icsEscape(r.label)}`,
+      'BEGIN:VALARM', 'TRIGGER:PT0M', 'ACTION:DISPLAY', `DESCRIPTION:${icsEscape(r.label)}`, 'END:VALARM',
+      'END:VEVENT'
+    );
+  });
+  lines.push('END:VCALENDAR');
+  return lines.join('\r\n');
 }
 
 /* Estimate bpm from an array of tap timestamps (ms). Needs >= 2 taps. */

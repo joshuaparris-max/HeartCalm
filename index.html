@@ -19,6 +19,7 @@
   <div class="topbar">
     <div class="brand"><span class="dot"></span><h1>Calm</h1></div>
     <div class="row" style="flex:0 0 auto">
+      <button class="iconbtn" id="privacyBtn" title="Private mode — blur on-screen details" aria-label="Toggle private mode">🙈 Private</button>
       <button class="iconbtn" id="themeBtn" title="Light / dark" aria-label="Toggle light or dark theme">◐ Theme</button>
     </div>
   </div>
@@ -49,12 +50,14 @@
         <button class="btn sm" id="toggleChime">🔕 Sound off</button>
         <button class="btn sm" id="toggleVibe">📳 Vibration off</button>
         <button class="btn sm" id="toggleVoice">🗣 Voice off</button>
+        <button class="btn sm" id="toggleDim">🌙 Dim</button>
       </div>
 
       <p class="dim" style="margin-top:12px;font-size:.85rem">
-        Default: inhale 4s through the nose, exhale 6s through the mouth, no holds (~6 breaths/min).
-        The longer exhale is deliberate and calming. Turn on <strong>Sound</strong> for a gentle
-        tone that rises as you breathe in and falls as you breathe out.
+        Recommended: <strong>4–6 breathing</strong> — inhale 4s through the nose, exhale 6s through
+        the mouth, no holds (~6 breaths/min). The longer exhale is deliberate and calming, and there
+        are no breath-holds. Turn on <strong>Sound</strong> for a gentle tone that rises as you breathe
+        in and falls as you breathe out. <strong>Dim</strong> lowers the circle's glow for sensitive eyes.
       </p>
     </div>
 
@@ -68,59 +71,132 @@
     </div>
   </section>
 
-  <!-- ===================== PALPITATION STEPS VIEW ===================== -->
+  <!-- ===================== PALPITATION GUIDED VIEW ===================== -->
   <section class="view" id="view-palp" aria-label="Palpitation help">
     <div class="card" style="border-color:var(--warn-line); background:var(--warn-bg)">
       <p style="color:var(--warn-ink);margin:0"><strong>Call 000 now</strong> if this comes with chest pain or pressure,
       shortness of breath, fainting or near-fainting, severe dizziness, or palpitations that won't settle and feel wrong.</p>
     </div>
+
+    <!-- Step 1 -->
     <div class="card">
-      <h2>Your emergency info</h2>
-      <div id="emergCard"></div>
-    </div>
-    <div class="card">
-      <h2>Steady yourself</h2>
+      <h2><span class="pill">Step 1</span> Steady yourself</h2>
       <ol class="steps">
         <li>Stop and sit down</li>
         <li>Loosen your collar / tight clothing</li>
         <li>Feet flat on the floor</li>
         <li>One hand on your belly, one on your chest</li>
-        <li>Start the 4–6 breathing</li>
-        <li>Log what happened</li>
       </ol>
-      <button class="cta" id="palpStartBreathe" style="margin-top:6px">▶  Start breathing</button>
-      <button class="cta secondary" id="palpLog" style="margin-top:10px">📝  Log it</button>
+    </div>
+
+    <!-- Step 2 — red-flag self check -->
+    <div class="card">
+      <h2><span class="pill">Step 2</span> Quick safety check</h2>
+      <p class="dim" style="font-size:.85rem">Tick anything you have right now.</p>
+      <div id="palpRedflags"></div>
+      <div id="palpEscalate" class="hidden" style="margin-top:10px">
+        <div class="emerg"><strong>Stop — this may need urgent assessment.</strong> Call <strong>000</strong> now if symptoms are present, severe, worsening, or not settling.</div>
+      </div>
+    </div>
+
+    <!-- Step 3 -->
+    <div class="card">
+      <h2><span class="pill">Step 3</span> Breathe (4–6, no holds)</h2>
+      <button class="cta" id="palpStartBreathe">▶  Start breathing</button>
+    </div>
+
+    <!-- Step 4 -->
+    <div class="card">
+      <h2><span class="pill">Step 4</span> Recheck &amp; log</h2>
+      <p class="dim" style="font-size:.85rem">How are you now? Capture it while it's fresh — duration, rhythm and what you were doing help your GP most.</p>
+      <button class="cta secondary" id="palpLog">📝  Log this episode</button>
+    </div>
+
+    <div class="card">
+      <h2>Your emergency info</h2>
+      <div id="emergCard"></div>
     </div>
   </section>
 
   <!-- ===================== LOG VIEW ===================== -->
   <section class="view" id="view-log" aria-label="Log">
+    <!-- red-flag escalation appears here when a dangerous symptom is ticked -->
+    <div class="card hidden" id="redflagAlert" style="border-color:var(--warn-line); background:var(--warn-bg)">
+      <p style="color:var(--warn-ink);margin:0"><strong>Stop — this may need urgent assessment.</strong>
+      Call <strong>000</strong> now if symptoms are present, severe, worsening, or not settling.</p>
+    </div>
+
     <div class="card">
       <h2>Quick log</h2>
       <div id="logForm">
         <p class="dim" id="logStamp" style="font-size:.85rem"></p>
+
+        <div class="ctrl-label">Symptoms</div>
         <div class="grid2">
           <button class="btn sm" data-flag="cough" aria-pressed="false">Cough</button>
           <button class="btn sm" data-flag="dizzy" aria-pressed="false">Dizzy</button>
           <button class="btn sm" data-flag="chestpain" aria-pressed="false">Chest pain</button>
           <button class="btn sm" data-flag="breathless" aria-pressed="false">Breathless</button>
+          <button class="btn sm" data-flag="wheeze" aria-pressed="false">Wheeze</button>
+          <button class="btn sm" data-flag="tightchest" aria-pressed="false">Tight chest</button>
           <button class="btn sm" data-flag="flushed" aria-pressed="false">Hot / flushed face</button>
           <button class="btn sm" data-flag="fainted" aria-pressed="false">Faint / near-faint</button>
           <button class="btn sm" data-flag="irregular" aria-pressed="false">Irregular pulse</button>
           <button class="btn sm" data-flag="ventolin" aria-pressed="false">Ventolin taken</button>
         </div>
 
+        <div class="ctrl-label">How long did it last?</div>
+        <div class="seg" data-seg="duration">
+          <button data-val="<1 min">&lt;1 min</button>
+          <button data-val="1–5 min">1–5 min</button>
+          <button data-val="5–15 min">5–15 min</button>
+          <button data-val=">15 min">&gt;15 min</button>
+        </div>
+
+        <div class="ctrl-label">Rhythm</div>
+        <div class="seg" data-seg="rhythm">
+          <button data-val="regular">Regular</button>
+          <button data-val="irregular">Irregular</button>
+          <button data-val="unsure">Not sure</button>
+        </div>
+
+        <div class="ctrl-label">What were you doing?</div>
+        <div class="seg" data-seg="context">
+          <button data-val="at rest">At rest</button>
+          <button data-val="on exertion">On exertion</button>
+          <button data-val="lying down">Lying down</button>
+        </div>
+        <div class="field" style="margin-top:8px"><input type="text" id="logActivity" placeholder="e.g. standing up from desk, after coffee (optional)"></div>
+
         <div class="ctrl-label">Measure pulse (optional)</div>
         <button class="tapbtn" id="tapPulse"><span class="big">— bpm</span>Tap on each heartbeat</button>
         <button class="btn sm" id="tapReset" style="margin-top:8px">Reset taps</button>
-
         <div class="grid2" style="margin-top:12px">
-          <div class="field"><label>Pulse (bpm, optional)</label><input type="number" id="logPulse" inputmode="numeric" placeholder="—"></div>
-          <div class="field"><label>Stress 0–10 (optional)</label><input type="number" id="logStress" inputmode="numeric" min="0" max="10" placeholder="—"></div>
+          <div class="field"><label>Pulse before (bpm)</label><input type="number" id="logPulse" inputmode="numeric" placeholder="—"></div>
+          <div class="field"><label>Pulse after breathing (bpm)</label><input type="number" id="logPulseAfter" inputmode="numeric" placeholder="—"></div>
         </div>
-        <div class="field"><label>Triggers / context (caffeine, alcohol, nicotine, poor sleep, skipped meal…)</label>
+
+        <div class="ctrl-label">Did the breathing help?</div>
+        <div class="seg" data-seg="helped">
+          <button data-val="yes">Yes</button>
+          <button data-val="partly">Partly</button>
+          <button data-val="no">No</button>
+        </div>
+
+        <div class="ctrl-label">Cough timing (if any)</div>
+        <div class="seg" data-seg="coughTiming">
+          <button data-val="none">None</button>
+          <button data-val="before">Before</button>
+          <button data-val="during">During</button>
+          <button data-val="after">After</button>
+        </div>
+
+        <label class="chk" style="margin-top:8px"><input type="checkbox" id="logVentRecent"><span>Ventolin / reliever taken in the last 4 hours</span></label>
+
+        <div class="field" style="margin-top:6px"><label>Stress 0–10 (optional)</label><input type="number" id="logStress" inputmode="numeric" min="0" max="10" placeholder="—"></div>
+        <div class="field"><label>Triggers (caffeine, alcohol, nicotine, poor sleep, skipped meal…)</label>
           <input type="text" id="logTriggers" placeholder="optional"></div>
-        <div class="field"><label>Note (optional)</label><textarea id="logNote" placeholder="How it felt, how long, what helped…"></textarea></div>
+        <div class="field"><label>Note (optional)</label><textarea id="logNote" placeholder="How it felt, what helped…"></textarea></div>
         <button class="cta" id="saveLog">Save episode</button>
       </div>
     </div>
@@ -139,9 +215,9 @@
   <section class="view" id="view-care" aria-label="Care">
     <div class="card">
       <h2>Hydration check</h2>
-      <p class="dim" style="font-size:.85rem">Tick what's true right now.</p>
+      <p class="dim" style="font-size:.85rem">Tick what's true right now — the box below tells you water-only vs oral rehydration.</p>
       <div id="hydroChecks"></div>
-      <div id="hydroMsg" class="disclaim hidden"></div>
+      <div id="hydroMsg" class="disclaim"></div>
     </div>
 
     <div class="card">
@@ -180,6 +256,18 @@
     </div>
 
     <div class="card">
+      <h2>While symptoms are active — do not</h2>
+      <ul style="margin:0;padding-left:18px">
+        <li>No intense exercise until your GP has reviewed this</li>
+        <li>No stimulant decongestants unless a pharmacist/doctor says okay</li>
+        <li>No potassium supplements or salt substitutes unless advised</li>
+        <li>Don't stack magnesium or other supplements as a "fix"</li>
+        <li>No carotid (neck) massage or other DIY manoeuvres</li>
+        <li>No doom-searching symptoms while you're in it — breathe first</li>
+      </ul>
+    </div>
+
+    <div class="card">
       <h2>Medication & trigger log</h2>
       <div class="row" style="flex-wrap:wrap">
         <button class="btn sm" data-care="med:Ventolin/salbutamol">Ventolin</button>
@@ -207,10 +295,14 @@
 
     <div class="card">
       <h2>Reminders</h2>
-      <p class="dim" style="font-size:.85rem">Gentle nudges. Browser notifications if you allow them (and best-effort in the background on supported devices), otherwise an in-page banner while the app is open.</p>
+      <p class="dim" style="font-size:.85rem">In-app reminders fire reliably <strong>only while Calm is open</strong> (or installed and running in the background on supported devices). For nudges that always arrive, add them to your phone's calendar below.</p>
+      <button class="btn sm" id="installBtn" style="margin-bottom:10px;display:none">⬇ Install app</button>
       <button class="btn sm" id="notifBtn" style="margin-bottom:10px">Enable browser notifications</button>
       <div id="reminderList"></div>
-      <button class="btn sm" id="addReminder" style="margin-top:6px">+ Add reminder</button>
+      <div class="row" style="margin-top:6px">
+        <button class="btn sm" id="addReminder">+ Add reminder</button>
+        <button class="btn sm" id="icsExport">📅 Add to calendar (.ics)</button>
+      </div>
     </div>
 
     <div class="card">
@@ -231,7 +323,11 @@
     <div class="card">
       <h2>GP / cardiology prep</h2>
       <div id="prepSummary"></div>
-      <button class="btn sm" id="copyPrep" style="margin-top:10px">Copy summary to take to GP</button>
+      <div class="row" style="margin-top:10px">
+        <button class="btn sm" id="copyPrep">Copy summary</button>
+        <button class="btn sm" id="copyReception">Copy message for reception</button>
+        <button class="btn sm" id="printPrep">🖨 Print</button>
+      </div>
       <hr class="sep">
       <h3>Questions to ask</h3>
       <ul style="margin:0;padding-left:18px;font-size:.92rem">
@@ -301,6 +397,9 @@
     <button class="cta" id="onboardClose" style="margin-top:8px">Get started</button>
   </div>
 </div>
+
+<!-- print-only area, filled on demand -->
+<div id="printArea" aria-hidden="true"></div>
 
 <script type="module" src="app.js"></script>
 </body>

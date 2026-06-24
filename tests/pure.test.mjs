@@ -1,8 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  fmt, pad2, escHtml, logsToText, logsToCSV, aggregatePrep,
+  fmt, pad2, escHtml, logsToText, logsToCSV, CSV_HEAD, aggregatePrep,
   bpmFromTaps, dailyCounts, average, parsePattern, phasesToString,
+  topTriggers, gpStats, icsForReminders,
 } from '../pure.js';
 
 const FLAG_LABEL = { cough:'Cough', chestpain:'Chest pain', ventolin:'Ventolin' };
@@ -83,17 +84,62 @@ test('aggregatePrep counts symptoms and red flags', () => {
 });
 
 test('logsToCSV builds a header and escapes quotes', () => {
-  const csv = logsToCSV([{ ts: 0, flags:['cough'], pulse:80, stress:5, triggers:'caffeine', note:'said "ow"' }], FLAG_LABEL);
+  const csv = logsToCSV([{ ts: 0, flags:['cough'], duration:'1–5 min', rhythm:'irregular',
+    context:'at rest', pulse:80, pulseAfter:72, activity:'sitting', helped:'yes',
+    coughTiming:'during', ventolinRecent:true, stress:5, triggers:'caffeine', note:'said "ow"' }], FLAG_LABEL);
   const lines = csv.split('\n');
-  assert.equal(lines[0], '"timestamp","symptoms","pulse","stress","triggers","note"');
+  assert.equal(lines[0], CSV_HEAD.map(h => `"${h}"`).join(','));
+  assert.ok(lines[0].includes('"duration"'));
+  assert.ok(lines[0].includes('"pulse_after"'));
   assert.ok(lines[1].includes('""ow""')); // doubled quotes
   assert.ok(lines[1].includes('Cough'));
+  assert.ok(lines[1].includes('irregular'));
+  assert.ok(lines[1].includes('yes')); // ventolin_recent
+});
+
+test('topTriggers ranks free-text triggers', () => {
+  const logs = [
+    { triggers: 'caffeine, poor sleep' },
+    { triggers: 'Caffeine' },
+    { triggers: 'alcohol; caffeine' },
+  ];
+  const top = topTriggers(logs, 3);
+  assert.equal(top[0].trigger, 'caffeine');
+  assert.equal(top[0].count, 3);
+});
+
+test('gpStats adds 7-day window and clinical counts', () => {
+  const now = Date.now();
+  const logs = [
+    { ts: now, flags:['chestpain'], rhythm:'irregular', context:'on exertion', helped:'yes', ventolinRecent:true, stress:6, pulse:110 },
+    { ts: now - 10 * 86400000, flags:['cough'], rhythm:'regular', stress:2, pulse:70 },
+  ];
+  const s = gpStats(logs, [], RED, now);
+  assert.equal(s.total, 2);
+  assert.equal(s.last7, 1);       // only the recent one
+  assert.equal(s.irregular, 1);
+  assert.equal(s.ventolinRecent, 1);
+  assert.equal(s.onExertion, 1);
+  assert.equal(s.withRed, 1);
+  assert.equal(Math.round(s.avgPulse), 90);
+});
+
+test('icsForReminders emits a daily VEVENT per active reminder', () => {
+  const ics = icsForReminders([
+    { id:'r1', time:'07:30', label:'Water + food', on:true },
+    { id:'r2', time:'21:00', label:'Off one', on:false },
+  ], '20260624');
+  assert.ok(ics.includes('BEGIN:VCALENDAR'));
+  assert.ok(ics.includes('DTSTART:20260624T073000'));
+  assert.ok(ics.includes('RRULE:FREQ=DAILY'));
+  assert.ok(ics.includes('SUMMARY:Water + food'));
+  assert.ok(!ics.includes('Off one')); // disabled reminder excluded
 });
 
 test('logsToText handles empty and populated logs', () => {
   assert.equal(logsToText([], FLAG_LABEL), 'No episodes logged.');
   const txt = logsToText([{ ts: 0, flags:['cough'], pulse:80, stress:0, triggers:'', note:'hi' }], FLAG_LABEL);
   assert.ok(txt.includes('Symptoms: Cough'));
-  assert.ok(txt.includes('Pulse: 80'));
+  assert.ok(txt.includes('Pulse before: 80'));
   assert.ok(txt.includes('Stress: 0/10'));
 });

@@ -3,8 +3,8 @@
    All DOM/behaviour logic. Pure helpers live in pure.js.
    ========================================================================= */
 import {
-  fmt, pad2, escHtml, logsToText, logsToCSV, aggregatePrep,
-  bpmFromTaps, dailyCounts, average, parsePattern, phasesToString,
+  fmt, pad2, escHtml, logsToText, logsToCSV, aggregatePrep, gpStats,
+  bpmFromTaps, dailyCounts, average, parsePattern, phasesToString, icsForReminders,
 } from './pure.js';
 
 const $ = id => document.getElementById(id);
@@ -47,8 +47,11 @@ const BUILTIN_PATTERNS = {
 const CUE = { in:'Breathe in', out:'Breathe out', hold:'Hold' };
 
 const FLAG_LABEL = { cough:'Cough', dizzy:'Dizzy', chestpain:'Chest pain', breathless:'Breathless',
-  flushed:'Hot/flushed face', fainted:'Faint/near-faint', irregular:'Irregular pulse', ventolin:'Ventolin' };
+  wheeze:'Wheeze', tightchest:'Tight chest', flushed:'Hot/flushed face', fainted:'Faint/near-faint',
+  irregular:'Irregular pulse', ventolin:'Ventolin' };
 const RED = ['chestpain','breathless','fainted'];
+/* Symptoms that should trigger the urgent-assessment prompt. */
+const ESCALATE = ['chestpain','breathless','fainted','dizzy','irregular'];
 
 const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -57,7 +60,7 @@ const LS = {
   get(k, d){ try{ const v = JSON.parse(localStorage.getItem(k)); return v ?? d; }catch(e){ return d; } },
   set(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} },
 };
-const DEFAULT_SETTINGS = { theme:'dark', chime:false, vibe:false, voice:false,
+const DEFAULT_SETTINGS = { theme:'dark', chime:false, vibe:false, voice:false, dim:false,
   dur:300, pattern:'46', onboarded:false, patterns:[] };
 const DEFAULT_EMERGENCY = { conditions:'', meds:'', allergies:'', contactName:'', contactPhone:'', notes:'' };
 
@@ -97,13 +100,21 @@ $('themeBtn').onclick = () => {
   applyTheme(); save();
 };
 
+/* Private mode — blur sensitive content on screen (e.g. at work). Session-only. */
+let privateMode = false;
+$('privacyBtn').onclick = () => {
+  privateMode = !privateMode;
+  document.body.classList.toggle('private', privateMode);
+  $('privacyBtn').textContent = privateMode ? '🙉 Private on' : '🙈 Private';
+};
+
 /* ------------------------------------------------------------------ nav */
 function show(view){
   document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === 'view-' + view));
   document.querySelectorAll('nav button').forEach(b => b.classList.toggle('active', b.dataset.view === view));
   if(view === 'log') stampLog();
   if(view === 'more'){ renderPrep(); renderTrends(); }
-  if(view === 'palp') renderEmergencyCard();
+  if(view === 'palp'){ renderEmergencyCard(); renderPalpChecks(); }
   window.scrollTo(0, 0);
 }
 document.querySelectorAll('nav button').forEach(b => b.onclick = () => show(b.dataset.view));
@@ -181,10 +192,14 @@ function syncBreatheButtons(){
   $('toggleVibe').classList.toggle('on', state.settings.vibe);
   $('toggleVoice').textContent = state.settings.voice ? '🗣 Voice on' : '🗣 Voice off';
   $('toggleVoice').classList.toggle('on', state.settings.voice);
+  $('toggleDim').textContent = state.settings.dim ? '🌙 Dim on' : '🌙 Dim';
+  $('toggleDim').classList.toggle('on', state.settings.dim);
 }
 $('toggleChime').onclick = () => { state.settings.chime = !state.settings.chime; if(state.settings.chime) ensureAudio(); save(); syncBreatheButtons(); };
 $('toggleVibe').onclick  = () => { state.settings.vibe  = !state.settings.vibe;  save(); syncBreatheButtons(); };
 $('toggleVoice').onclick = () => { state.settings.voice = !state.settings.voice; save(); syncBreatheButtons(); };
+$('toggleDim').onclick   = () => { state.settings.dim   = !state.settings.dim;   save(); syncBreatheButtons(); applyDim(); };
+function applyDim(){ $('overlay').classList.toggle('dim', !!state.settings.dim); }
 
 /* ------------------------------------------------------------------ breathing engine */
 let breath = null;
@@ -193,6 +208,7 @@ function startBreathing(){
   const pat = currentPattern();
   const total = state.settings.dur;
   $('ovPattern').textContent = pat.name;
+  applyDim();
   $('overlay').classList.add('show');
   let remaining = total;
   let pi = 0, t = pat.phases[0][1];
@@ -239,21 +255,67 @@ $('ovStop').onclick = () => stopBreathing(false);
 $('palpBtn').onclick = () => show('palp');
 $('palpLog').onclick = () => show('log');
 
+const PALP_REDFLAGS = [
+  ['chestpain','Chest pain or pressure'],
+  ['breathless','Short of breath'],
+  ['fainted','Fainting or near-fainting'],
+  ['dizzy','Severe dizziness'],
+  ['wontsettle',"Won't settle / feels wrong"],
+];
+function renderPalpChecks(){
+  $('palpRedflags').innerHTML = PALP_REDFLAGS.map(([k, t]) =>
+    `<label class="chk"><input type="checkbox" data-palpflag="${k}"><span>${t}</span></label>`).join('');
+  $('palpRedflags').querySelectorAll('input').forEach(i => i.onchange = () => {
+    const any = [...$('palpRedflags').querySelectorAll('input')].some(x => x.checked);
+    $('palpEscalate').classList.toggle('hidden', !any);
+    if(any) vibe(30);
+  });
+  $('palpEscalate').classList.add('hidden');
+}
+
 /* ------------------------------------------------------------------ quick log */
 const flags = {};
+const draft = { duration:'', rhythm:'', context:'', helped:'', coughTiming:'' };
+function checkEscalation(){
+  const hot = Object.keys(flags).some(k => flags[k] && ESCALATE.includes(k)) || draft.rhythm === 'irregular';
+  $('redflagAlert').classList.toggle('hidden', !hot);
+}
 document.querySelectorAll('[data-flag]').forEach(b => b.onclick = () => {
   const k = b.dataset.flag; flags[k] = !flags[k];
   b.classList.toggle('on', flags[k]); b.setAttribute('aria-pressed', String(!!flags[k]));
+  checkEscalation();
 });
+/* generic single-select segmented groups */
+document.querySelectorAll('.seg[data-seg]').forEach(group => {
+  const name = group.dataset.seg;
+  group.querySelectorAll('button').forEach(btn => btn.onclick = () => {
+    const val = btn.dataset.val;
+    draft[name] = (draft[name] === val) ? '' : val; // tap again to clear
+    group.querySelectorAll('button').forEach(x => x.classList.toggle('on', x.dataset.val === draft[name]));
+    if(name === 'rhythm') checkEscalation();
+  });
+});
+function clearSeg(){
+  Object.keys(draft).forEach(k => draft[k] = '');
+  document.querySelectorAll('.seg button').forEach(b => b.classList.remove('on'));
+}
 function stampLog(){
   const d = new Date();
-  $('logStamp').textContent = 'Now: ' + d.toLocaleString([], {weekday:'short', hour:'2-digit', minute:'2-digit', day:'numeric', month:'short'});
+  $('logStamp').textContent = 'Started: ' + d.toLocaleString([], {weekday:'short', hour:'2-digit', minute:'2-digit', day:'numeric', month:'short'});
 }
 $('saveLog').onclick = () => {
   const entry = {
     ts: Date.now(),
     flags: Object.keys(flags).filter(k => flags[k]),
+    duration: draft.duration,
+    rhythm: draft.rhythm,
+    context: draft.context,
     pulse: $('logPulse').value || '',
+    pulseAfter: $('logPulseAfter').value || '',
+    activity: $('logActivity').value.trim(),
+    helped: draft.helped,
+    coughTiming: draft.coughTiming,
+    ventolinRecent: $('logVentRecent').checked,
     stress: $('logStress').value || '',
     triggers: $('logTriggers').value.trim(),
     note: $('logNote').value.trim(),
@@ -261,26 +323,44 @@ $('saveLog').onclick = () => {
   state.logs.unshift(entry); save();
   Object.keys(flags).forEach(k => flags[k] = false);
   document.querySelectorAll('[data-flag]').forEach(b => { b.classList.remove('on'); b.setAttribute('aria-pressed','false'); });
-  $('logPulse').value = $('logStress').value = $('logTriggers').value = $('logNote').value = '';
+  clearSeg();
+  $('logPulse').value = $('logPulseAfter').value = $('logActivity').value =
+    $('logStress').value = $('logTriggers').value = $('logNote').value = '';
+  $('logVentRecent').checked = false;
+  $('redflagAlert').classList.add('hidden');
   pulseTaps = []; renderTapState();
   renderLogs(); toast('Episode saved'); show('log');
 };
 function renderLogs(){
   const logList = $('logList');
   if(!state.logs.length){ logList.innerHTML = '<p class="dim">No episodes logged yet.</p>'; return; }
-  logList.innerHTML = state.logs.map(e => {
+  logList.innerHTML = state.logs.map((e, idx) => {
     const d = new Date(e.ts);
     const when = d.toLocaleString([], {weekday:'short', day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'});
     const tags = (e.flags || []).map(f => `<span class="tag ${RED.includes(f) ? 'flag' : ''}">${escHtml(FLAG_LABEL[f] || f)}</span>`).join('');
     const extra = [];
-    if(e.pulse) extra.push('Pulse ' + escHtml(e.pulse));
+    if(e.duration) extra.push(escHtml(e.duration));
+    if(e.rhythm) extra.push(escHtml(e.rhythm));
+    if(e.context) extra.push(escHtml(e.context));
+    if(e.pulse) extra.push('Pulse ' + escHtml(e.pulse) + (e.pulseAfter ? '→' + escHtml(e.pulseAfter) : ''));
+    if(e.helped) extra.push('breathing ' + escHtml(e.helped));
+    if(e.ventolinRecent) extra.push('Ventolin <4h');
     if(e.stress !== '' && e.stress != null) extra.push('Stress ' + escHtml(e.stress) + '/10');
     if(e.triggers) extra.push(escHtml(e.triggers));
-    return `<div class="logitem"><div class="when">${when}</div>
+    return `<div class="logitem"><div class="row" style="align-items:flex-start">
+        <div class="when" style="flex:1">${when}</div>
+        <button class="btn sm" data-dellog="${e.ts}" style="flex:0 0 36px" aria-label="Delete this entry">✕</button>
+      </div>
       <div>${tags || '<span class="dim">no symptoms ticked</span>'}</div>
       ${extra.length ? `<div class="dim" style="font-size:.85rem;margin-top:4px">${extra.join(' · ')}</div>` : ''}
+      ${e.activity ? `<div class="dim" style="font-size:.85rem;margin-top:2px">Before: ${escHtml(e.activity)}</div>` : ''}
       ${e.note ? `<div style="margin-top:4px">${escHtml(e.note)}</div>` : ''}</div>`;
   }).join('');
+  logList.querySelectorAll('[data-dellog]').forEach(b => b.onclick = () => {
+    if(!confirm('Delete this entry?')) return;
+    const ts = Number(b.dataset.dellog);
+    state.logs = state.logs.filter(x => x.ts !== ts); save(); renderLogs();
+  });
 }
 $('copyLog').onclick = () => copy(logsToText(state.logs, FLAG_LABEL));
 $('csvLog').onclick = () => {
@@ -348,13 +428,19 @@ function renderHydro(){
   $('hydroChecks').querySelectorAll('input').forEach(i => i.onchange = updateHydro);
 }
 function updateHydro(){
-  const unchecked = [...$('hydroChecks').querySelectorAll('input')].filter(i => !i.checked).length;
+  const checks = [...$('hydroChecks').querySelectorAll('input')];
+  const unchecked = checks.filter(i => !i.checked);
   const msg = $('hydroMsg');
-  if(unchecked > 0){
-    msg.classList.remove('hidden');
-    msg.innerHTML = 'Some dehydration signs may be present. If so: consider pharmacy oral rehydration solution, mixed exactly as directed. ' +
-      'Do not use electrolyte drinks as a heart treatment. Do not start potassium supplements or salt substitutes unless a clinician advises it.';
-  } else { msg.classList.add('hidden'); }
+  if(!unchecked.length){
+    msg.innerHTML = '<strong>Water only.</strong> No dehydration signs ticked — sip water steadily through the day.';
+    return;
+  }
+  const flagged = unchecked.map(i => i.dataset.hyd);
+  const orsSigns = ['urine','standing','gi','sweat','fever'].some(k => flagged.includes(k));
+  msg.innerHTML = orsSigns
+    ? '<strong>Consider oral rehydration.</strong> With fever, sweating, vomiting/diarrhoea, dark urine or light-headedness on standing, a pharmacy oral rehydration solution (Hydralyte etc.) mixed exactly as directed can help. ' +
+      'Do <strong>not</strong> use electrolyte drinks as a heart treatment, and do not start potassium supplements or salt substitutes unless a clinician advises it.'
+    : '<strong>Top up with water.</strong> Have a drink now and keep sipping. If fever, vomiting, dark urine or dizziness-on-standing appear, switch to oral rehydration solution.';
 }
 
 /* ------------------------------------------------------------------ today plan */
@@ -430,30 +516,59 @@ function checkReminders(){
   });
 }
 function showBanner(msg){ $('reminderText').textContent = msg; $('reminderBanner').classList.remove('hidden'); }
+$('icsExport').onclick = () => {
+  const on = state.reminders.filter(r => r.on);
+  if(!on.length){ toast('No active reminders'); return; }
+  const d = new Date();
+  const dt = '' + d.getFullYear() + pad2(d.getMonth() + 1) + pad2(d.getDate());
+  downloadBlob(icsForReminders(state.reminders, dt), 'calm-reminders.ics', 'text/calendar');
+  toast('Calendar file saved — open it to add the reminders');
+};
+/* Install prompt — make it a real installable PWA so reminders can run. */
+let deferredPrompt = null;
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault(); deferredPrompt = e;
+  const b = $('installBtn'); if(b) b.style.display = '';
+});
+$('installBtn').onclick = async () => {
+  if(!deferredPrompt) return;
+  deferredPrompt.prompt(); await deferredPrompt.userChoice;
+  deferredPrompt = null; $('installBtn').style.display = 'none';
+};
 $('reminderDismiss').onclick = () => $('reminderBanner').classList.add('hidden');
 setInterval(checkReminders, 20000);
 
 /* ------------------------------------------------------------------ GP prep + trends */
+function stats(){ return gpStats(state.logs, state.care, RED, Date.now()); }
 function renderPrep(){
-  const a = aggregatePrep(state.logs, state.care, RED);
+  const a = stats();
   const days = Object.entries(a.byDay).map(([d, n]) => `${d}: ${n}`).join('<br>') || 'none';
+  const trig = a.triggers.length ? a.triggers.map(t => `${t.trigger} (${t.count})`).join(', ') : 'none recorded';
   $('prepSummary').innerHTML = `
     <div class="dim" style="font-size:.9rem">
-    <b>Total episodes:</b> ${a.total}<br>
-    <b>By day:</b><br>${days}<br>
-    <b>With cough:</b> ${a.withCough} · <b>With hot/flushed face:</b> ${a.withFlush}<br>
-    <b>With red-flag symptom:</b> ${a.withRed} · <b>With Ventolin noted:</b> ${a.withVent}<br>
-    <b>Care/trigger entries logged:</b> ${a.careCount}
+    <b>Total episodes:</b> ${a.total} · <b>last 7 days:</b> ${a.last7}<br>
+    <b>Irregular rhythm:</b> ${a.irregular} · <b>on exertion:</b> ${a.onExertion}<br>
+    <b>Red-flag symptom:</b> ${a.withRed} · <b>with cough:</b> ${a.withCough} · <b>Ventolin &lt;4h:</b> ${a.ventolinRecent}<br>
+    <b>Breathing helped:</b> ${a.helped} · <b>avg pulse:</b> ${a.avgPulse != null ? Math.round(a.avgPulse) : '—'} · <b>avg stress:</b> ${a.avgStress != null ? a.avgStress.toFixed(1) : '—'}/10<br>
+    <b>Top triggers:</b> ${trig}<br>
+    <b>By day:</b><br>${days}
     </div>`;
 }
-$('copyPrep').onclick = () => {
-  const a = aggregatePrep(state.logs, state.care, RED);
+function prepText(){
+  const a = stats();
   const careLines = state.care.slice(0, 40).map(c => '  • ' + new Date(c.ts).toLocaleString() + ' — ' + c.item.split(':').slice(1).join(':')).join('\n');
-  const txt = `GP / cardiology prep summary
+  return `GP / cardiology prep summary
 ============================
-Total palpitation episodes: ${a.total}
-With cough: ${a.withCough}
-With red-flag symptom (chest pain / breathless / faint): ${a.withRed}
+Total palpitation episodes: ${a.total} (last 7 days: ${a.last7})
+Episodes with irregular rhythm: ${a.irregular}
+Episodes on exertion: ${a.onExertion}
+Episodes with a red-flag symptom (chest pain / breathless / faint): ${a.withRed}
+Episodes with cough: ${a.withCough}
+Episodes with Ventolin/reliever in prior 4h: ${a.ventolinRecent}
+Breathing reported as helping: ${a.helped}
+Average pulse (where recorded): ${a.avgPulse != null ? Math.round(a.avgPulse) : 'n/a'}
+Average stress: ${a.avgStress != null ? a.avgStress.toFixed(1) + '/10' : 'n/a'}
+Most common triggers: ${a.triggers.map(t => t.trigger + ' (' + t.count + ')').join(', ') || 'none recorded'}
 
 ${logsToText(state.logs, FLAG_LABEL)}
 
@@ -466,7 +581,20 @@ Questions to ask
   • Repeat/bring forward Holter or event monitoring?
   • Could asthma, reflux, viral illness, medication, thyroid, anaemia or electrolytes contribute?
   • Any reason to bring cardiology forward?`;
-  copy(txt);
+}
+$('copyPrep').onclick = () => copy(prepText());
+$('copyReception').onclick = () => {
+  const a = stats();
+  copy(`Hi, I'd like to book an appointment about ongoing heart palpitations. ` +
+    `I've logged ${a.total} episode${a.total === 1 ? '' : 's'}${a.last7 ? ` (${a.last7} in the last 7 days)` : ''}` +
+    `${a.withRed ? `, ${a.withRed} with symptoms like chest pain/breathlessness/faintness` : ''}. ` +
+    `I have a symptom diary I can bring or send. Could I please see a GP about this and discuss whether an ECG or Holter monitor is needed? Thank you.`);
+};
+$('printPrep').onclick = () => {
+  $('printArea').innerHTML = `<h1>Calm — GP / cardiology prep</h1>
+    <p>Generated ${new Date().toLocaleString()}</p>
+    <pre>${escHtml(prepText())}</pre>`;
+  window.print();
 };
 
 /* Inline SVG trend chart — no external library (upgrade #1). */
@@ -673,7 +801,7 @@ export function t(key){ return (STRINGS[LANG] && STRINGS[LANG][key]) || STRINGS.
 function renderAll(){
   renderToday(); renderLogs(); renderReminders(); renderRes(); renderHydro();
   renderTrends(); renderCustomPatterns(); renderEmergencyForm(); renderEmergencyCard();
-  syncBreatheButtons(); stampLog(); renderTapState();
+  syncBreatheButtons(); stampLog(); renderTapState(); applyDim();
 }
 renderAll();
 maybeOnboard();

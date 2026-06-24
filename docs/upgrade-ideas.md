@@ -119,6 +119,45 @@ server" privacy promise — data is encrypted client-side before it ever leaves 
 - **Sound toggle discoverability** — controls are now under labelled "Length / Pattern /
   Sound & feedback" headings rather than unlabelled grey buttons.
 
+---
+
+## Round 2 — clinical & UX improvements (2026-06-24)
+
+Implemented from two reviewer passes focused on making the log clinically useful and
+the in-the-moment flow safer.
+
+1. **Sharper structured log.** Added the discriminators a cardiologist actually uses:
+   **duration**, **regular/irregular rhythm**, **at rest / on exertion / lying down**,
+   **pulse before → after breathing**, **what you were doing**, **did breathing help**,
+   **cough timing**, and **Ventolin in the last 4h**. Mirrors a Holter symptom diary.
+2. **Red-flag escalation.** Ticking chest pain, breathless, faint/near-faint, dizzy, or
+   irregular pulse now surfaces an immediate "this may need urgent assessment — call 000"
+   banner, in both the log and the palpitation self-check.
+3. **Guided "Palpitations now" flow.** The palpitation screen is now a numbered sequence:
+   steady → safety check → breathe → recheck & log.
+4. **4–6 default reinforced**, box breathing kept but de-emphasised in copy (no breath-holds
+   is the safer default for palpitations).
+5. **Asthma-aware symptoms.** Added wheeze + tight-chest toggles and structured cough timing.
+6. **Honest + real reminders.** Copy now states in-app reminders fire only while open;
+   added an **Install app** prompt and **calendar (.ics) export** so nudges can live in the
+   phone's real calendar and always arrive.
+7. **Eye-safe breathing.** Added a **Dim** mode — the circle never brightens on inhale and
+   its glow can be removed entirely (MGD / light-sensitivity friendly). `prefers-reduced-motion`
+   already holds the circle still.
+8. **Stronger GP export.** 7-day count, red-flag/cough/Ventolin/exertion counts, avg pulse &
+   stress, top triggers, plus **Print summary** and **Copy message for reception**.
+9. **Hydration decision card.** Clear water-only vs oral-rehydration guidance based on which
+   signs are present, instead of a single generic message.
+10. **"While symptoms are active — do not" checklist** (no intense exercise, no stimulant
+    decongestants, no potassium/magnesium stacking, no carotid massage, no doom-searching).
+11. **Privacy controls.** Per-entry delete (not just clear-all) and a **Private mode** that
+    blurs on-screen log/trends/emergency details until hovered — for use at work.
+
+Test suite expanded to **14 passing tests** (added CSV schema, `topTriggers`, `gpStats`,
+`icsForReminders`).
+
+---
+
 ### Deploy notes
 - Static site; `vercel.json` sets `no-cache` on `sw.js` and `manifest.json`.
 - After each change, bump `CACHE` in `sw.js` (already automated in spirit — remember to bump).
