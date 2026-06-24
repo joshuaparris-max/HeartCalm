@@ -7,218 +7,54 @@
 <link rel="manifest" href="manifest.json" />
 <link rel="apple-touch-icon" href="icon-192.png" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <meta name="apple-mobile-web-app-title" content="Calm" />
 <title>Calm — breathing & palpitation support</title>
-<style>
-/* =========================================================================
-   THEME — soft dark by default (light sensitivity / MGD friendly).
-   No harsh whites, gentle contrast. Light theme available via toggle.
-   ========================================================================= */
-:root{
-  --bg:#11161c; --bg2:#171e26; --card:#1b2530; --card2:#212d3a;
-  --ink:#cdd6e0; --ink-dim:#8a98a8; --line:#28323f;
-  --accent:#5e9c8f;        /* muted teal — calm */
-  --accent-ink:#0e1418;
-  --warn-bg:#2a1d1d; --warn-ink:#e7b4b0; --warn-line:#5a3a38;
-  --danger:#c4756e;        /* muted, never bright/flashing */
-  --ok:#5e9c8f;
-  --radius:16px; --maxw:680px;
-  --shadow:0 6px 24px rgba(0,0,0,.35);
-}
-html[data-theme="light"]{
-  --bg:#eef1f3; --bg2:#e6eaee; --card:#ffffff; --card2:#f3f6f8;
-  --ink:#2c3640; --ink-dim:#647284; --line:#d8dee4;
-  --accent:#3f7c6f; --accent-ink:#ffffff;
-  --warn-bg:#fbeceb; --warn-ink:#8a3b34; --warn-line:#e8cbc8;
-  --danger:#b4544c; --ok:#3f7c6f;
-  --shadow:0 6px 24px rgba(40,60,80,.12);
-}
-*{box-sizing:border-box}
-html,body{margin:0;padding:0}
-body{
-  background:var(--bg); color:var(--ink);
-  font:17px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
-  -webkit-font-smoothing:antialiased; padding-bottom:96px;
-}
-.wrap{max-width:var(--maxw); margin:0 auto; padding:16px 16px 0}
-h1{font-size:1.15rem; font-weight:600; margin:0; letter-spacing:.2px}
-h2{font-size:1.02rem; font-weight:600; margin:0 0 10px; color:var(--ink)}
-h3{font-size:.95rem; font-weight:600; margin:0 0 6px}
-p{margin:0 0 10px}
-small,.dim{color:var(--ink-dim)}
-button{font-family:inherit; cursor:pointer}
-:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
-
-/* header */
-.topbar{display:flex; align-items:center; justify-content:space-between; gap:10px; padding:6px 0 14px}
-.topbar .brand{display:flex; align-items:center; gap:10px}
-.dot{width:12px;height:12px;border-radius:50%;background:var(--accent)}
-.iconbtn{background:var(--card); color:var(--ink); border:1px solid var(--line);
-  border-radius:12px; padding:8px 12px; font-size:.9rem}
-
-/* card */
-.card{background:var(--card); border:1px solid var(--line); border-radius:var(--radius);
-  padding:18px; margin:0 0 14px; box-shadow:var(--shadow)}
-.card.tight{padding:14px}
-
-/* primary CTA */
-.cta{
-  display:block; width:100%; border:none; border-radius:var(--radius);
-  background:var(--accent); color:var(--accent-ink); font-size:1.3rem; font-weight:600;
-  padding:22px; text-align:center; letter-spacing:.3px;
-}
-.cta.secondary{background:var(--card2); color:var(--ink); border:1px solid var(--line); font-size:1.05rem; padding:16px}
-.cta.danger{background:transparent; color:var(--danger); border:1.5px solid var(--danger); font-size:1.1rem; padding:18px; font-weight:600}
-
-.row{display:flex; gap:10px; flex-wrap:wrap}
-.row > *{flex:1}
-.btn{background:var(--card2); color:var(--ink); border:1px solid var(--line);
-  border-radius:12px; padding:14px; font-size:1rem; text-align:center}
-.btn.on{background:var(--accent); color:var(--accent-ink); border-color:var(--accent)}
-.btn.sm{padding:10px 12px; font-size:.9rem}
-
-/* nav */
-nav{position:fixed; bottom:0; left:0; right:0; background:var(--bg2);
-  border-top:1px solid var(--line); display:flex; justify-content:center; z-index:40}
-nav .inner{display:flex; max-width:var(--maxw); width:100%; }
-nav button{flex:1; background:none; border:none; color:var(--ink-dim);
-  padding:10px 4px 14px; font-size:.72rem; display:flex; flex-direction:column; align-items:center; gap:3px}
-nav button .ic{font-size:1.25rem; line-height:1}
-nav button.active{color:var(--accent)}
-
-/* safety footer banner (persistent, above nav) */
-.safety{position:fixed; bottom:62px; left:0; right:0; z-index:39;
-  background:var(--warn-bg); color:var(--warn-ink); border-top:1px solid var(--warn-line);
-  font-size:.82rem; line-height:1.35; padding:9px 14px; text-align:center}
-.safety strong{color:var(--warn-ink)}
-@media (max-width:480px){ body{padding-bottom:150px} }
-
-/* breathing */
-.breathe-stage{display:flex; flex-direction:column; align-items:center; gap:18px; padding:10px 0}
-.circle-box{position:relative; width:260px; height:260px; display:flex; align-items:center; justify-content:center}
-.circle{width:120px;height:120px;border-radius:50%;
-  background:radial-gradient(circle at 50% 40%, var(--accent), #3f6f64);
-  box-shadow:0 0 50px rgba(94,156,143,.35);
-  transition:transform .25s linear; will-change:transform}
-.circle-label{position:absolute; text-align:center; color:var(--accent-ink); font-weight:600; pointer-events:none}
-.circle-label .cue{font-size:1.05rem}
-.circle-label .cnt{font-size:2.4rem; line-height:1}
-.bigtime{font-size:2rem; font-weight:600; font-variant-numeric:tabular-nums}
-
-/* fullscreen breathing overlay */
-.overlay{position:fixed; inset:0; background:var(--bg); z-index:60; display:none;
-  flex-direction:column; align-items:center; justify-content:center; gap:22px; padding:24px}
-.overlay.show{display:flex}
-
-/* log list */
-.logitem{border:1px solid var(--line); border-radius:12px; padding:12px; margin-bottom:10px; background:var(--card2)}
-.logitem .when{font-weight:600}
-.tag{display:inline-block; font-size:.72rem; padding:2px 8px; border-radius:999px;
-  background:var(--card); border:1px solid var(--line); color:var(--ink-dim); margin:3px 4px 0 0}
-.tag.flag{background:var(--warn-bg); color:var(--warn-ink); border-color:var(--warn-line)}
-
-label.chk{display:flex; align-items:center; gap:10px; padding:8px 0; cursor:pointer}
-label.chk input{width:20px;height:20px; accent-color:var(--accent)}
-input[type=text],input[type=time],input[type=number],textarea,select{
-  width:100%; background:var(--bg2); color:var(--ink); border:1px solid var(--line);
-  border-radius:10px; padding:11px; font-size:1rem; font-family:inherit}
-textarea{min-height:64px; resize:vertical}
-.field{margin:0 0 12px}
-.field label{display:block; font-size:.85rem; color:var(--ink-dim); margin-bottom:5px}
-.grid2{display:grid; grid-template-columns:1fr 1fr; gap:10px}
-.hidden{display:none !important}
-.steps{counter-reset:s; list-style:none; padding:0; margin:0}
-.steps li{counter-increment:s; position:relative; padding:12px 12px 12px 48px; border:1px solid var(--line);
-  border-radius:12px; margin-bottom:8px; background:var(--card2)}
-.steps li::before{content:counter(s); position:absolute; left:10px; top:50%; transform:translateY(-50%);
-  width:26px;height:26px;border-radius:50%; background:var(--accent); color:var(--accent-ink);
-  display:flex;align-items:center;justify-content:center; font-weight:600; font-size:.9rem}
-a.res{display:block; padding:13px 14px; border:1px solid var(--line); border-radius:12px;
-  margin-bottom:8px; color:var(--ink); text-decoration:none; background:var(--card2)}
-a.res:hover{border-color:var(--accent)}
-a.res small{display:block}
-.banner{background:var(--accent); color:var(--accent-ink); border-radius:12px; padding:12px 14px;
-  margin:0 0 14px; display:flex; justify-content:space-between; align-items:center; gap:10px}
-.banner button{background:rgba(0,0,0,.18); color:inherit; border:none; border-radius:8px; padding:6px 10px}
-.pill{display:inline-block; padding:3px 10px; border-radius:999px; background:var(--card2);
-  border:1px solid var(--line); font-size:.8rem; color:var(--ink-dim)}
-.disclaim{font-size:.8rem; color:var(--ink-dim); border:1px dashed var(--line); border-radius:12px; padding:12px; margin-top:6px}
-.view{display:none}
-.view.active{display:block}
-hr.sep{border:none; border-top:1px solid var(--line); margin:14px 0}
-</style>
+<link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-
-<!-- =========================================================================
-     RESOURCES — edit these freely. Just change the title/url/note strings.
-     (Curated calm links only. No medication/supplement/dosage content.)
-     ========================================================================= -->
-<script>
-const RESOURCES = [
-  { title:"NHS — Breathing exercise for stress",
-    url:"https://www.nhs.uk/mental-health/self-help/guides-tools-and-activities/breathing-exercises-for-stress/",
-    note:"Simple official breathing guide" },
-  { title:"Healthdirect — Heart palpitations (Australia)",
-    url:"https://www.healthdirect.gov.au/heart-palpitations",
-    note:"What palpitations are and when to seek help" },
-  { title:"Smiling Mind (free, Australian)",
-    url:"https://www.smilingmind.com.au/",
-    note:"Free mindfulness app & exercises" },
-  { title:"Guided 4-6 breathing (video)",
-    url:"https://www.youtube.com/results?search_query=4-6+breathing+exercise",
-    note:"Pick one you like and paste its link here" },
-  { title:"Box breathing guided (video)",
-    url:"https://www.youtube.com/results?search_query=box+breathing+guided",
-    note:"Alternate pattern" },
-];
-
-/* DEFAULT REMINDERS — editable in the Reminders tab too. */
-const DEFAULT_REMINDERS = [
-  { id:"r1", time:"07:30", label:"Water + food + 5 min breathing", on:true },
-  { id:"r2", time:"10:30", label:"Water check", on:true },
-  { id:"r3", time:"12:30", label:"Lunch + 5 min breathing", on:true },
-  { id:"r4", time:"15:00", label:"Water + posture reset", on:true },
-  { id:"r5", time:"19:00", label:"Light dinner / reflux precautions", on:true },
-  { id:"r6", time:"21:00", label:"5 min breathing + symptom log", on:true },
-];
-</script>
 
 <div class="wrap">
   <div class="topbar">
     <div class="brand"><span class="dot"></span><h1>Calm</h1></div>
     <div class="row" style="flex:0 0 auto">
-      <button class="iconbtn" id="themeBtn" title="Light / dark">◐ Theme</button>
+      <button class="iconbtn" id="themeBtn" title="Light / dark" aria-label="Toggle light or dark theme">◐ Theme</button>
     </div>
   </div>
 
   <!-- in-page reminder banner -->
-  <div id="reminderBanner" class="banner hidden">
+  <div id="reminderBanner" class="banner hidden" role="status">
     <span id="reminderText">Time for a breathing round — and a sip of water.</span>
     <button id="reminderDismiss">Dismiss</button>
   </div>
 
   <!-- ===================== BREATHE VIEW ===================== -->
-  <section class="view active" id="view-breathe">
+  <section class="view active" id="view-breathe" aria-label="Breathe">
     <div class="card">
       <button class="cta" id="startBreathe">▶  Start breathing</button>
-      <div class="row" style="margin-top:12px">
+
+      <div class="ctrl-label">Length</div>
+      <div class="row">
         <button class="btn" data-dur="60">1 min</button>
         <button class="btn" data-dur="180">3 min</button>
         <button class="btn on" data-dur="300">5 min</button>
       </div>
-      <div class="row" style="margin-top:10px">
-        <button class="btn on" data-pattern="46">4–6 breathing</button>
-        <button class="btn" data-pattern="box">Box 4-4-4-4</button>
-      </div>
-      <div class="row" style="margin-top:10px">
-        <button class="btn sm" id="toggleChime">🔕 Chime off</button>
+
+      <div class="ctrl-label">Pattern</div>
+      <div class="row" id="patternBtns"><!-- rendered by app.js --></div>
+
+      <div class="ctrl-label">Sound &amp; feedback</div>
+      <div class="row">
+        <button class="btn sm" id="toggleChime">🔕 Sound off</button>
         <button class="btn sm" id="toggleVibe">📳 Vibration off</button>
+        <button class="btn sm" id="toggleVoice">🗣 Voice off</button>
       </div>
+
       <p class="dim" style="margin-top:12px;font-size:.85rem">
         Default: inhale 4s through the nose, exhale 6s through the mouth, no holds (~6 breaths/min).
-        The longer exhale is deliberate and calming.
+        The longer exhale is deliberate and calming. Turn on <strong>Sound</strong> for a gentle
+        tone that rises as you breathe in and falls as you breathe out.
       </p>
     </div>
 
@@ -233,10 +69,14 @@ const DEFAULT_REMINDERS = [
   </section>
 
   <!-- ===================== PALPITATION STEPS VIEW ===================== -->
-  <section class="view" id="view-palp">
+  <section class="view" id="view-palp" aria-label="Palpitation help">
     <div class="card" style="border-color:var(--warn-line); background:var(--warn-bg)">
       <p style="color:var(--warn-ink);margin:0"><strong>Call 000 now</strong> if this comes with chest pain or pressure,
       shortness of breath, fainting or near-fainting, severe dizziness, or palpitations that won't settle and feel wrong.</p>
+    </div>
+    <div class="card">
+      <h2>Your emergency info</h2>
+      <div id="emergCard"></div>
     </div>
     <div class="card">
       <h2>Steady yourself</h2>
@@ -248,28 +88,33 @@ const DEFAULT_REMINDERS = [
         <li>Start the 4–6 breathing</li>
         <li>Log what happened</li>
       </ol>
-      <button class="cta" id="palpStartBreathe" style="margin-top:6px">▶  Start 4–6 breathing</button>
+      <button class="cta" id="palpStartBreathe" style="margin-top:6px">▶  Start breathing</button>
       <button class="cta secondary" id="palpLog" style="margin-top:10px">📝  Log it</button>
     </div>
   </section>
 
   <!-- ===================== LOG VIEW ===================== -->
-  <section class="view" id="view-log">
+  <section class="view" id="view-log" aria-label="Log">
     <div class="card">
       <h2>Quick log</h2>
       <div id="logForm">
         <p class="dim" id="logStamp" style="font-size:.85rem"></p>
         <div class="grid2">
-          <button class="btn sm" data-flag="cough">Cough</button>
-          <button class="btn sm" data-flag="dizzy">Dizzy</button>
-          <button class="btn sm" data-flag="chestpain">Chest pain</button>
-          <button class="btn sm" data-flag="breathless">Breathless</button>
-          <button class="btn sm" data-flag="flushed">Hot / flushed face</button>
-          <button class="btn sm" data-flag="fainted">Faint / near-faint</button>
-          <button class="btn sm" data-flag="irregular">Irregular pulse</button>
-          <button class="btn sm" data-flag="ventolin">Ventolin taken</button>
+          <button class="btn sm" data-flag="cough" aria-pressed="false">Cough</button>
+          <button class="btn sm" data-flag="dizzy" aria-pressed="false">Dizzy</button>
+          <button class="btn sm" data-flag="chestpain" aria-pressed="false">Chest pain</button>
+          <button class="btn sm" data-flag="breathless" aria-pressed="false">Breathless</button>
+          <button class="btn sm" data-flag="flushed" aria-pressed="false">Hot / flushed face</button>
+          <button class="btn sm" data-flag="fainted" aria-pressed="false">Faint / near-faint</button>
+          <button class="btn sm" data-flag="irregular" aria-pressed="false">Irregular pulse</button>
+          <button class="btn sm" data-flag="ventolin" aria-pressed="false">Ventolin taken</button>
         </div>
-        <div class="grid2" style="margin-top:10px">
+
+        <div class="ctrl-label">Measure pulse (optional)</div>
+        <button class="tapbtn" id="tapPulse"><span class="big">— bpm</span>Tap on each heartbeat</button>
+        <button class="btn sm" id="tapReset" style="margin-top:8px">Reset taps</button>
+
+        <div class="grid2" style="margin-top:12px">
           <div class="field"><label>Pulse (bpm, optional)</label><input type="number" id="logPulse" inputmode="numeric" placeholder="—"></div>
           <div class="field"><label>Stress 0–10 (optional)</label><input type="number" id="logStress" inputmode="numeric" min="0" max="10" placeholder="—"></div>
         </div>
@@ -290,8 +135,8 @@ const DEFAULT_REMINDERS = [
     </div>
   </section>
 
-  <!-- ===================== CARE VIEW (hydration / reflux / viral / meds) ===================== -->
-  <section class="view" id="view-care">
+  <!-- ===================== CARE VIEW ===================== -->
+  <section class="view" id="view-care" aria-label="Care">
     <div class="card">
       <h2>Hydration check</h2>
       <p class="dim" style="font-size:.85rem">Tick what's true right now.</p>
@@ -353,14 +198,34 @@ const DEFAULT_REMINDERS = [
     </div>
   </section>
 
-  <!-- ===================== MORE VIEW (reminders / resources / prep / data) ===================== -->
-  <section class="view" id="view-more">
+  <!-- ===================== MORE VIEW ===================== -->
+  <section class="view" id="view-more" aria-label="More">
+    <div class="card">
+      <h2>Trends</h2>
+      <div id="trends"></div>
+    </div>
+
     <div class="card">
       <h2>Reminders</h2>
-      <p class="dim" style="font-size:.85rem">Gentle nudges while the tab is open. Browser notifications if you allow them, otherwise an in-page banner.</p>
+      <p class="dim" style="font-size:.85rem">Gentle nudges. Browser notifications if you allow them (and best-effort in the background on supported devices), otherwise an in-page banner while the app is open.</p>
       <button class="btn sm" id="notifBtn" style="margin-bottom:10px">Enable browser notifications</button>
       <div id="reminderList"></div>
       <button class="btn sm" id="addReminder" style="margin-top:6px">+ Add reminder</button>
+    </div>
+
+    <div class="card">
+      <h2>Breathing patterns</h2>
+      <p class="dim" style="font-size:.85rem">Add your own. Phases are <code>type:seconds</code> separated by commas — type is <code>in</code>, <code>out</code> or <code>hold</code>.</p>
+      <div id="customPatterns"></div>
+      <div class="field" style="margin-top:8px"><label>Name</label><input type="text" id="patName" placeholder="e.g. Long exhale"></div>
+      <div class="field"><label>Phases</label><input type="text" id="patPhases" placeholder="in:4, hold:2, out:8"></div>
+      <button class="btn sm" id="addPattern">+ Add pattern</button>
+    </div>
+
+    <div class="card">
+      <h2>Emergency info</h2>
+      <p class="dim" style="font-size:.85rem">Stored only on this device. Shown on the palpitation screen so it's there when you need it.</p>
+      <div id="emergForm"></div>
     </div>
 
     <div class="card">
@@ -384,9 +249,16 @@ const DEFAULT_REMINDERS = [
     </div>
 
     <div class="card">
-      <h2>Data</h2>
-      <p class="dim" style="font-size:.85rem">Everything stays on this device in your browser. No account, no server.</p>
-      <button class="btn sm danger" id="clearData" style="color:var(--danger);border-color:var(--danger)">Clear all data</button>
+      <h2>Data &amp; backup</h2>
+      <p class="dim" style="font-size:.85rem">Everything stays on this device in your browser. No account, no server. Back up or move to another device with a file.</p>
+      <div class="row">
+        <button class="btn sm" id="exportData">Export backup</button>
+        <button class="btn sm" id="importData">Import backup</button>
+      </div>
+      <button class="btn sm" id="exportEnc" style="margin-top:10px">Export encrypted backup (passphrase)</button>
+      <input type="file" id="importFile" accept="application/json,.json" class="hidden">
+      <hr class="sep">
+      <button class="btn sm" id="clearData" style="color:var(--danger);border-color:var(--danger)">Clear all data</button>
     </div>
 
     <p class="disclaim">This is a support and logging tool, not a medical device. It does not diagnose,
@@ -395,418 +267,41 @@ const DEFAULT_REMINDERS = [
 </div>
 
 <!-- persistent safety banner -->
-<div class="safety">
+<div class="safety" role="note">
   <strong>Call 000</strong> if palpitations come with chest pain/pressure, shortness of breath,
   dizziness, fainting or near-fainting, or if they won't settle and feel wrong.
 </div>
 
 <!-- bottom nav -->
-<nav><div class="inner">
-  <button data-view="breathe" class="active"><span class="ic">🫁</span>Breathe</button>
-  <button data-view="log"><span class="ic">📝</span>Log</button>
-  <button data-view="care"><span class="ic">💧</span>Care</button>
-  <button data-view="more"><span class="ic">⋯</span>More</button>
+<nav aria-label="Main"><div class="inner">
+  <button data-view="breathe" class="active"><span class="ic" aria-hidden="true">🫁</span>Breathe</button>
+  <button data-view="log"><span class="ic" aria-hidden="true">📝</span>Log</button>
+  <button data-view="care"><span class="ic" aria-hidden="true">💧</span>Care</button>
+  <button data-view="more"><span class="ic" aria-hidden="true">⋯</span>More</button>
 </div></nav>
 
 <!-- fullscreen breathing overlay -->
-<div class="overlay" id="overlay">
+<div class="overlay" id="overlay" role="dialog" aria-label="Breathing session">
   <div class="bigtime" id="ovTime">5:00</div>
   <div class="circle-box">
     <div class="circle" id="ovCircle"></div>
-    <div class="circle-label"><div class="cue" id="ovCue">Get ready</div><div class="cnt" id="ovCnt"></div></div>
+    <div class="circle-label"><div class="cue" id="ovCue" aria-live="assertive">Get ready</div><div class="cnt" id="ovCnt"></div></div>
   </div>
   <div class="pill" id="ovPattern">4–6 breathing</div>
   <button class="cta secondary" id="ovStop" style="max-width:320px">Finish</button>
 </div>
 
-<script>
-/* =========================================================================
-   STORAGE
-   ========================================================================= */
-const LS = {
-  get(k,d){ try{ return JSON.parse(localStorage.getItem(k)) ?? d }catch(e){ return d } },
-  set(k,v){ localStorage.setItem(k, JSON.stringify(v)) },
-};
-const state = {
-  logs: LS.get('logs', []),
-  reminders: LS.get('reminders', DEFAULT_REMINDERS),
-  settings: LS.get('settings', { theme:'dark', chime:false, vibe:false, dur:300, pattern:'46' }),
-  care: LS.get('care', []),
-};
-function save(){ LS.set('logs',state.logs); LS.set('reminders',state.reminders);
-  LS.set('settings',state.settings); LS.set('care',state.care); }
+<!-- onboarding -->
+<div class="modal" id="onboard" role="dialog" aria-label="Welcome">
+  <div class="sheet">
+    <h2>Welcome to Calm</h2>
+    <p>A gentle place to slow your breathing, steady yourself during palpitations, and keep a simple log to share with your GP.</p>
+    <p class="disclaim" style="margin-top:0">Calm is a support and logging tool — <strong>not a medical device</strong>. It does not diagnose or treat, and gives no medication advice. If palpitations come with chest pain, breathlessness, fainting or won't settle, call <strong>000</strong>.</p>
+    <p class="dim" style="font-size:.85rem">Everything stays on this device. You can add your emergency info and back up your data any time from the More tab.</p>
+    <button class="cta" id="onboardClose" style="margin-top:8px">Get started</button>
+  </div>
+</div>
 
-/* =========================================================================
-   THEME
-   ========================================================================= */
-function applyTheme(){ document.documentElement.dataset.theme = state.settings.theme; }
-applyTheme();
-themeBtn.onclick = ()=>{ state.settings.theme = state.settings.theme==='dark'?'light':'dark'; applyTheme(); save(); };
-
-/* =========================================================================
-   NAV
-   ========================================================================= */
-function show(view){
-  document.querySelectorAll('.view').forEach(v=>v.classList.toggle('active', v.id==='view-'+view));
-  document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('active', b.dataset.view===view));
-  if(view==='log') stampLog();
-  if(view==='more') renderPrep();
-  window.scrollTo(0,0);
-}
-document.querySelectorAll('nav button').forEach(b=> b.onclick=()=>show(b.dataset.view));
-
-/* =========================================================================
-   BREATHING
-   ========================================================================= */
-const PATTERNS = {
-  '46':  { name:'4–6 breathing', phases:[['in',4],['out',6]] },
-  'box': { name:'Box 4-4-4-4', phases:[['in',4],['hold',4],['out',4],['hold',4]] },
-};
-const CUE = { in:'Breathe in', out:'Breathe out', hold:'Hold' };
-
-// selection buttons
-document.querySelectorAll('[data-dur]').forEach(b=> b.onclick=()=>{
-  document.querySelectorAll('[data-dur]').forEach(x=>x.classList.remove('on'));
-  b.classList.add('on'); state.settings.dur=+b.dataset.dur; save();
-});
-document.querySelectorAll('[data-pattern]').forEach(b=> b.onclick=()=>{
-  document.querySelectorAll('[data-pattern]').forEach(x=>x.classList.remove('on'));
-  b.classList.add('on'); state.settings.pattern=b.dataset.pattern; save();
-});
-function syncBreatheButtons(){
-  document.querySelectorAll('[data-dur]').forEach(x=>x.classList.toggle('on', +x.dataset.dur===state.settings.dur));
-  document.querySelectorAll('[data-pattern]').forEach(x=>x.classList.toggle('on', x.dataset.pattern===state.settings.pattern));
-  toggleChime.textContent = state.settings.chime ? '🔔 Chime on' : '🔕 Chime off';
-  toggleChime.classList.toggle('on', state.settings.chime);
-  toggleVibe.textContent = state.settings.vibe ? '📳 Vibration on' : '📳 Vibration off';
-  toggleVibe.classList.toggle('on', state.settings.vibe);
-}
-toggleChime.onclick = ()=>{ state.settings.chime=!state.settings.chime; save(); syncBreatheButtons(); };
-toggleVibe.onclick  = ()=>{ state.settings.vibe =!state.settings.vibe;  save(); syncBreatheButtons(); };
-
-let breath = null;
-let audioCtx = null;
-function chime(){
-  if(!state.settings.chime) return;
-  try{
-    audioCtx = audioCtx || new (window.AudioContext||window.webkitAudioContext)();
-    const o=audioCtx.createOscillator(), g=audioCtx.createGain();
-    o.type='sine'; o.frequency.value=528; o.connect(g); g.connect(audioCtx.destination);
-    g.gain.setValueAtTime(0.0001, audioCtx.currentTime);
-    g.gain.exponentialRampToValueAtTime(0.06, audioCtx.currentTime+0.05);
-    g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime+0.9);
-    o.start(); o.stop(audioCtx.currentTime+0.9);
-  }catch(e){}
-}
-function vibe(ms){ if(state.settings.vibe && navigator.vibrate) navigator.vibrate(ms); }
-
-function fmt(s){ const m=Math.floor(s/60), x=s%60; return m+':'+String(x).padStart(2,'0'); }
-
-function startBreathing(){
-  const pat = PATTERNS[state.settings.pattern];
-  const total = state.settings.dur;
-  ovPattern.textContent = pat.name;
-  overlay.classList.add('show');
-  let remaining = total;
-  let pi = 0, t = pat.phases[0][1];
-  ovTime.textContent = fmt(remaining);
-  setPhase(pat.phases[0][0], t);
-
-  function setPhase(type, secs){
-    ovCue.textContent = CUE[type];
-    // circle size: large for in/hold-after-in, small for out
-    const big = (type==='in');
-    const small = (type==='out');
-    let scale = big ? 2.0 : small ? 0.85 : 2.0;
-    ovCircle.style.transitionDuration = secs+'s';
-    // force reflow then animate toward target across the phase
-    requestAnimationFrame(()=>{ ovCircle.style.transform = 'scale('+scale+')'; });
-    chime(); vibe(big?60:40);
-  }
-
-  breath = setInterval(()=>{
-    remaining--; t--;
-    ovTime.textContent = fmt(Math.max(remaining,0));
-    ovCnt.textContent = t>0 ? t : '';
-    if(remaining<=0){ stopBreathing(true); return; }
-    if(t<=0){
-      pi = (pi+1) % pat.phases.length;
-      const [type,secs]=pat.phases[pi]; t=secs; setPhase(type,secs);
-    }
-  },1000);
-  // init count display
-  ovCnt.textContent = t;
-}
-function stopBreathing(done){
-  clearInterval(breath); breath=null;
-  ovCircle.style.transitionDuration='0.6s'; ovCircle.style.transform='scale(1)';
-  overlay.classList.remove('show');
-  if(done){ vibe([80,80,80]); }
-}
-startBreathe.onclick = startBreathing;
-palpStartBreathe.onclick = ()=>{ show('breathe'); startBreathing(); };
-ovStop.onclick = ()=>stopBreathing(false);
-
-/* =========================================================================
-   PALPITATION
-   ========================================================================= */
-palpBtn.onclick = ()=>show('palp');
-palpLog.onclick = ()=>show('log');
-
-/* =========================================================================
-   QUICK LOG
-   ========================================================================= */
-const flags = {};
-document.querySelectorAll('[data-flag]').forEach(b=> b.onclick=()=>{
-  const k=b.dataset.flag; flags[k]=!flags[k]; b.classList.toggle('on', flags[k]);
-});
-function stampLog(){
-  const d=new Date();
-  logStamp.textContent = 'Now: '+d.toLocaleString([], {weekday:'short', hour:'2-digit', minute:'2-digit', day:'numeric', month:'short'});
-}
-saveLog.onclick = ()=>{
-  const entry = {
-    ts: Date.now(),
-    flags: Object.keys(flags).filter(k=>flags[k]),
-    pulse: logPulse.value || '',
-    stress: logStress.value || '',
-    triggers: logTriggers.value.trim(),
-    note: logNote.value.trim(),
-  };
-  state.logs.unshift(entry); save();
-  // reset
-  Object.keys(flags).forEach(k=>flags[k]=false);
-  document.querySelectorAll('[data-flag]').forEach(b=>b.classList.remove('on'));
-  logPulse.value=logStress.value=logTriggers.value=logNote.value='';
-  renderLogs();
-  show('log');
-};
-const FLAG_LABEL = { cough:'Cough', dizzy:'Dizzy', chestpain:'Chest pain', breathless:'Breathless',
-  flushed:'Hot/flushed face', fainted:'Faint/near-faint', irregular:'Irregular pulse', ventolin:'Ventolin' };
-const RED = ['chestpain','breathless','fainted'];
-function renderLogs(){
-  if(!state.logs.length){ logList.innerHTML='<p class="dim">No episodes logged yet.</p>'; return; }
-  logList.innerHTML = state.logs.map(e=>{
-    const d=new Date(e.ts);
-    const when=d.toLocaleString([], {weekday:'short', day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'});
-    const tags=e.flags.map(f=>`<span class="tag ${RED.includes(f)?'flag':''}">${FLAG_LABEL[f]||f}</span>`).join('');
-    const extra=[];
-    if(e.pulse) extra.push('Pulse '+e.pulse);
-    if(e.stress!=='') extra.push('Stress '+e.stress+'/10');
-    if(e.triggers) extra.push(e.triggers);
-    return `<div class="logitem"><div class="when">${when}</div>
-      <div>${tags||'<span class="dim">no symptoms ticked</span>'}</div>
-      ${extra.length?`<div class="dim" style="font-size:.85rem;margin-top:4px">${extra.join(' · ')}</div>`:''}
-      ${e.note?`<div style="margin-top:4px">${esc(e.note)}</div>`:''}</div>`;
-  }).join('');
-}
-function esc(s){ return s.replace(/[&<>]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
-
-function logsAsText(){
-  if(!state.logs.length) return 'No episodes logged.';
-  return 'Palpitation log\n===============\n'+state.logs.map(e=>{
-    const d=new Date(e.ts).toLocaleString();
-    let s='• '+d;
-    if(e.flags.length) s+='\n  Symptoms: '+e.flags.map(f=>FLAG_LABEL[f]||f).join(', ');
-    if(e.pulse) s+='\n  Pulse: '+e.pulse;
-    if(e.stress!=='') s+='\n  Stress: '+e.stress+'/10';
-    if(e.triggers) s+='\n  Triggers: '+e.triggers;
-    if(e.note) s+='\n  Note: '+e.note;
-    return s;
-  }).join('\n');
-}
-copyLog.onclick = ()=>copy(logsAsText());
-csvLog.onclick = ()=>{
-  const head=['timestamp','symptoms','pulse','stress','triggers','note'];
-  const rows=state.logs.map(e=>[ new Date(e.ts).toISOString(),
-    e.flags.map(f=>FLAG_LABEL[f]||f).join('; '), e.pulse, e.stress, e.triggers, (e.note||'').replace(/\n/g,' ') ]);
-  const csv=[head,...rows].map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
-  const blob=new Blob([csv],{type:'text/csv'}); const url=URL.createObjectURL(blob);
-  const a=document.createElement('a'); a.href=url; a.download='palpitation-log.csv'; a.click(); URL.revokeObjectURL(url);
-};
-function copy(text){
-  navigator.clipboard?.writeText(text).then(
-    ()=>toast('Copied'),
-    ()=>{ prompt('Copy:', text); }
-  );
-}
-function toast(msg){
-  const t=document.createElement('div'); t.textContent=msg;
-  t.style.cssText='position:fixed;bottom:130px;left:50%;transform:translateX(-50%);background:var(--accent);color:var(--accent-ink);padding:10px 18px;border-radius:999px;z-index:80;font-size:.9rem';
-  document.body.appendChild(t); setTimeout(()=>t.remove(),1400);
-}
-
-/* =========================================================================
-   CARE quick-log buttons (hydration/reflux/viral/meds)
-   ========================================================================= */
-document.querySelectorAll('[data-care]').forEach(b=> b.onclick=()=>{
-  state.care.unshift({ ts:Date.now(), item:b.dataset.care }); save();
-  b.classList.add('on'); setTimeout(()=>b.classList.remove('on'),700);
-  toast('Logged: '+b.dataset.care.split(':')[1]);
-});
-
-/* hydration checklist */
-const HYDRO = [
-  { k:'water', t:"I've had water recently" },
-  { k:'urine', t:'Urine is not dark' },
-  { k:'standing', t:'Not dizzy when standing' },
-  { k:'gi', t:'No vomiting / diarrhoea' },
-  { k:'sweat', t:'Not sweating heavily' },
-  { k:'fever', t:'No fever' },
-];
-function renderHydro(){
-  hydroChecks.innerHTML = HYDRO.map(h=>
-    `<label class="chk"><input type="checkbox" data-hyd="${h.k}"><span>${h.t}</span></label>`).join('');
-  hydroChecks.querySelectorAll('input').forEach(i=> i.onchange=updateHydro);
-}
-function updateHydro(){
-  const unchecked = [...hydroChecks.querySelectorAll('input')].filter(i=>!i.checked).length;
-  if(unchecked>0){
-    hydroMsg.classList.remove('hidden');
-    hydroMsg.innerHTML = 'Some dehydration signs may be present. If so: consider pharmacy oral rehydration solution, mixed exactly as directed. '+
-      'Do not use electrolyte drinks as a heart treatment. Do not start potassium supplements or salt substitutes unless a clinician advises it.';
-  } else { hydroMsg.classList.add('hidden'); }
-}
-
-/* =========================================================================
-   TODAY PLAN
-   ========================================================================= */
-function renderToday(){
-  const blocks = [
-    ['Morning', ['Drink water','Eat something','5 min 4–6 breathing']],
-    ['Work', ['Keep water bottle visible','Midday 5 min breathing','Gentle 10-min walk if well','Eat if it has been too long']],
-    ['Afternoon', ['Oral rehydration only if dehydration signs are present']],
-    ['Evening', ['Light dinner','No lying down for 3h after eating','5 min breathing before bed','Log symptoms']],
-  ];
-  todayPlan.innerHTML = blocks.map(([h,items])=>
-    `<h3 style="margin-top:10px">${h}</h3><ul style="margin:0;padding-left:18px;font-size:.92rem">${items.map(i=>`<li>${i}</li>`).join('')}</ul>`).join('');
-}
-
-/* =========================================================================
-   REMINDERS
-   ========================================================================= */
-function renderReminders(){
-  reminderList.innerHTML = state.reminders.map(r=>`
-    <div class="row" style="align-items:center;margin-bottom:8px">
-      <input type="time" value="${r.time}" data-rid="${r.id}" data-f="time" style="flex:0 0 110px">
-      <input type="text" value="${esc(r.label)}" data-rid="${r.id}" data-f="label">
-      <button class="btn sm ${r.on?'on':''}" data-toggle="${r.id}" style="flex:0 0 60px">${r.on?'On':'Off'}</button>
-      <button class="btn sm" data-del="${r.id}" style="flex:0 0 40px">✕</button>
-    </div>`).join('');
-  reminderList.querySelectorAll('input').forEach(i=> i.onchange=()=>{
-    const r=state.reminders.find(x=>x.id===i.dataset.rid); r[i.dataset.f]=i.value; save();
-  });
-  reminderList.querySelectorAll('[data-toggle]').forEach(b=> b.onclick=()=>{
-    const r=state.reminders.find(x=>x.id===b.dataset.toggle); r.on=!r.on; save(); renderReminders();
-  });
-  reminderList.querySelectorAll('[data-del]').forEach(b=> b.onclick=()=>{
-    state.reminders=state.reminders.filter(x=>x.id!==b.dataset.del); save(); renderReminders();
-  });
-}
-addReminder.onclick = ()=>{
-  state.reminders.push({ id:'r'+Date.now(), time:'12:00', label:'Breathing round + water', on:true });
-  save(); renderReminders();
-};
-notifBtn.onclick = ()=>{
-  if(!('Notification' in window)){ toast('Notifications not supported'); return; }
-  Notification.requestPermission().then(p=> toast(p==='granted'?'Notifications on':'Using in-page banner'));
-};
-// reminder ticker — checks each minute while tab is open
-let lastFired = {};
-function checkReminders(){
-  const d=new Date(); const hhmm=String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
-  const key=d.toDateString()+hhmm;
-  state.reminders.forEach(r=>{
-    if(r.on && r.time===hhmm && lastFired[r.id]!==key){
-      lastFired[r.id]=key;
-      const msg=r.label+' — and a quiet sip of water.';
-      if('Notification' in window && Notification.permission==='granted'){
-        new Notification('Calm', { body:msg });
-      } else {
-        reminderText.textContent=msg; reminderBanner.classList.remove('hidden');
-      }
-    }
-  });
-}
-reminderDismiss.onclick = ()=>reminderBanner.classList.add('hidden');
-setInterval(checkReminders, 20000);
-
-/* =========================================================================
-   GP PREP SUMMARY
-   ========================================================================= */
-function renderPrep(){
-  const logs=state.logs, care=state.care;
-  const byDay={};
-  logs.forEach(e=>{ const k=new Date(e.ts).toLocaleDateString(); byDay[k]=(byDay[k]||0)+1; });
-  const withCough=logs.filter(e=>e.flags.includes('cough')).length;
-  const withFlush=logs.filter(e=>e.flags.includes('flushed')).length;
-  const withRed=logs.filter(e=>e.flags.some(f=>RED.includes(f))).length;
-  const withVent=logs.filter(e=>e.flags.includes('ventolin')).length;
-  const days=Object.entries(byDay).map(([d,n])=>`${d}: ${n}`).join('<br>')||'none';
-  prepSummary.innerHTML = `
-    <div class="dim" style="font-size:.9rem">
-    <b>Total episodes:</b> ${logs.length}<br>
-    <b>By day:</b><br>${days}<br>
-    <b>With cough:</b> ${withCough} · <b>With hot/flushed face:</b> ${withFlush}<br>
-    <b>With red-flag symptom:</b> ${withRed} · <b>With Ventolin noted:</b> ${withVent}<br>
-    <b>Care/trigger entries logged:</b> ${care.length}
-    </div>`;
-}
-copyPrep.onclick = ()=>{
-  const logs=state.logs, care=state.care;
-  const withCough=logs.filter(e=>e.flags.includes('cough')).length;
-  const withRed=logs.filter(e=>e.flags.some(f=>RED.includes(f))).length;
-  const careLines=care.slice(0,40).map(c=>'  • '+new Date(c.ts).toLocaleString()+' — '+c.item.split(':').slice(1).join(':')).join('\n');
-  const txt=`GP / cardiology prep summary
-============================
-Total palpitation episodes: ${logs.length}
-With cough: ${withCough}
-With red-flag symptom (chest pain / breathless / faint): ${withRed}
-
-${logsAsText()}
-
-Care / trigger log (recent)
-${careLines||'  none'}
-
-Questions to ask
-  • 12-lead ECG?
-  • Bloods: FBC, electrolytes (incl. magnesium/calcium), kidney function, thyroid, iron/ferritin?
-  • Repeat/bring forward Holter or event monitoring?
-  • Could asthma, reflux, viral illness, medication, thyroid, anaemia or electrolytes contribute?
-  • Any reason to bring cardiology forward?`;
-  copy(txt);
-};
-
-/* =========================================================================
-   RESOURCES
-   ========================================================================= */
-function renderRes(){
-  resList.innerHTML = RESOURCES.map(r=>
-    `<a class="res" href="${r.url}" target="_blank" rel="noopener">${r.title}<small class="dim">${r.note}</small></a>`).join('');
-}
-
-/* =========================================================================
-   CLEAR DATA
-   ========================================================================= */
-clearData.onclick = ()=>{
-  if(confirm('Delete all logs, reminders and settings on this device? This cannot be undone.')){
-    localStorage.clear();
-    state.logs=[]; state.care=[]; state.reminders=JSON.parse(JSON.stringify(DEFAULT_REMINDERS));
-    state.settings={ theme:state.settings.theme, chime:false, vibe:false, dur:300, pattern:'46' };
-    save(); renderLogs(); renderReminders(); renderPrep(); syncBreatheButtons(); toast('Cleared');
-  }
-};
-
-/* =========================================================================
-   INIT
-   ========================================================================= */
-renderToday(); renderLogs(); renderReminders(); renderRes(); renderHydro();
-syncBreatheButtons(); stampLog();
-
-/* PWA — register service worker for offline / installability */
-if('serviceWorker' in navigator){
-  window.addEventListener('load', ()=> navigator.serviceWorker.register('sw.js').catch(()=>{}));
-}
-</script>
+<script type="module" src="app.js"></script>
 </body>
 </html>

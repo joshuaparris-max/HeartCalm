@@ -1,10 +1,13 @@
 /* Calm — service worker
    Cache-first for the app shell so it works fully offline once loaded.
    Bump CACHE when you change any file to force an update. */
-const CACHE = 'calm-v1';
+const CACHE = 'calm-v2';
 const ASSETS = [
   './',
   './index.html',
+  './styles.css',
+  './pure.js',
+  './app.js',
   './manifest.json',
   './icon-192.png',
   './icon-512.png',
@@ -33,4 +36,24 @@ self.addEventListener('fetch', e => {
       return res;
     }).catch(() => caches.match('./index.html')))
   );
+});
+
+/* Best-effort background reminders (upgrade #4). Periodic Background Sync is
+   only supported on some Chromium browsers and needs an installed PWA; the
+   in-page ticker remains the reliable fallback. */
+self.addEventListener('periodicsync', event => {
+  if (event.tag === 'calm-reminders') {
+    event.waitUntil(self.registration.showNotification('Calm', {
+      body: 'Time for a breathing round — and a sip of water.',
+      tag: 'calm-reminder',
+    }));
+  }
+});
+
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+  event.waitUntil(self.clients.matchAll({ type: 'window' }).then(list => {
+    for (const c of list) { if ('focus' in c) return c.focus(); }
+    if (self.clients.openWindow) return self.clients.openWindow('./index.html');
+  }));
 });

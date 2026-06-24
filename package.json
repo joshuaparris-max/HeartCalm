@@ -1,0 +1,11 @@
+{
+  "name": "heart-calm",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Calm — a breathing & palpitation support PWA. Not a medical device.",
+  "type": "module",
+  "scripts": {
+    "test": "node --test"
+  },
+  "license": "MIT"
+}

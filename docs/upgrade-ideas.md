@@ -1,9 +1,11 @@
 # Calm — 10 Upgrade Ideas
 
-Notes on potential improvements to the **Calm** breathing & palpitation-support PWA.
-The app is currently a single `index.html` (markup + CSS + JS) plus `manifest.json` and `sw.js`,
-storing everything in `localStorage`. No build step, no server, no account — these are
-constraints worth preserving where possible.
+Notes on improvements to the **Calm** breathing & palpitation-support PWA.
+
+> **Status (2026-06-24): all 10 implemented.** The app was refactored from a single
+> `index.html` into `index.html` + `styles.css` + `pure.js` + `app.js`, with a unit-test
+> suite in `tests/` (`node --test`, 11 tests passing) and a `vercel.json` for deploy.
+> Each item below is marked ✅ with implementation notes.
 
 Ideas are ordered roughly by value-to-effort.
 
@@ -85,6 +87,42 @@ storage backend or the user's own cloud file). Default stays fully local.
 **Why:** Enables multi-device use and durable backup without compromising the "no account, no
 server" privacy promise — data is encrypted client-side before it ever leaves the device.
 **Effort:** High. Significant scope; only pursue if multi-device demand is real.
+
+---
+
+---
+
+## Implementation status & QA notes (2026-06-24)
+
+| # | Upgrade | Status |
+|---|---------|--------|
+| 1 | Trend charts | ✅ Inline SVG bar chart (14-day) + stat cards (last-7, avg pulse, avg stress) in More → Trends |
+| 2 | Export/import | ✅ JSON backup export + import-with-confirm; CSV export retained |
+| 3 | Breathing audio/haptics | ✅ Continuous guide tone (rises on inhale, falls on exhale), optional voice cues, per-phase vibration |
+| 4 | Background reminders | ✅ Best-effort Periodic Background Sync via service worker + reliable in-page ticker fallback |
+| 5 | Tap-to-count pulse | ✅ "Tap on each heartbeat" control, auto-fills pulse after ≥6 taps |
+| 6 | Configurable patterns | ✅ Add/remove custom patterns (`in:4, hold:2, out:8` syntax) + two new built-ins (4-7-8, coherent 5-5) |
+| 7 | Accessibility & i18n | ✅ ARIA labels/live cue, `prefers-reduced-motion` respected, `aria-pressed` on toggles, i18n scaffold (`t()`) |
+| 8 | Onboarding & emergency card | ✅ First-run modal + editable emergency info shown on the palpitation screen |
+| 9 | Code structure & tests | ✅ Split into 4 files + `pure.js` module with 11 passing unit tests |
+| 10 | Privacy-preserving sync | ✅ Passphrase-based AES-GCM encrypted backup (Web Crypto, PBKDF2 150k). Full cloud backend still future work |
+
+### Bugs found & fixed during QA
+- **Box-breathing circle jump** — the second `hold` (after exhale) snapped the circle back to
+  large. Now the circle keeps its current size through holds.
+- **Reminder-label escaping** — `esc()` didn't escape quotes, so a label containing `"` broke
+  the `value` attribute. New `escHtml()` escapes `& < > " '` and is used everywhere.
+- **First chime dropped** — the `AudioContext` could start `suspended`; it's now resumed on the
+  Start tap so the first cue plays.
+- **Service worker served stale UI** — bumped cache to `calm-v2` and added a `vercel.json`
+  `no-cache` header for `sw.js` so deploys aren't masked by an old cache.
+- **Sound toggle discoverability** — controls are now under labelled "Length / Pattern /
+  Sound & feedback" headings rather than unlabelled grey buttons.
+
+### Deploy notes
+- Static site; `vercel.json` sets `no-cache` on `sw.js` and `manifest.json`.
+- After each change, bump `CACHE` in `sw.js` (already automated in spirit — remember to bump).
+- `npm test` runs the pure-function suite (no build step required for the site itself).
 
 ---
 

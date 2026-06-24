@@ -1,0 +1,684 @@
+/* =========================================================================
+   Calm — app.js (ES module)
+   All DOM/behaviour logic. Pure helpers live in pure.js.
+   ========================================================================= */
+import {
+  fmt, pad2, escHtml, logsToText, logsToCSV, aggregatePrep,
+  bpmFromTaps, dailyCounts, average, parsePattern, phasesToString,
+} from './pure.js';
+
+const $ = id => document.getElementById(id);
+
+/* ------------------------------------------------------------------ data */
+const RESOURCES = [
+  { title:"NHS — Breathing exercise for stress",
+    url:"https://www.nhs.uk/mental-health/self-help/guides-tools-and-activities/breathing-exercises-for-stress/",
+    note:"Simple official breathing guide" },
+  { title:"Healthdirect — Heart palpitations (Australia)",
+    url:"https://www.healthdirect.gov.au/heart-palpitations",
+    note:"What palpitations are and when to seek help" },
+  { title:"Smiling Mind (free, Australian)",
+    url:"https://www.smilingmind.com.au/",
+    note:"Free mindfulness app & exercises" },
+  { title:"Guided 4-6 breathing (video)",
+    url:"https://www.youtube.com/results?search_query=4-6+breathing+exercise",
+    note:"Pick one you like" },
+  { title:"Box breathing guided (video)",
+    url:"https://www.youtube.com/results?search_query=box+breathing+guided",
+    note:"Alternate pattern" },
+];
+
+const DEFAULT_REMINDERS = [
+  { id:"r1", time:"07:30", label:"Water + food + 5 min breathing", on:true },
+  { id:"r2", time:"10:30", label:"Water check", on:true },
+  { id:"r3", time:"12:30", label:"Lunch + 5 min breathing", on:true },
+  { id:"r4", time:"15:00", label:"Water + posture reset", on:true },
+  { id:"r5", time:"19:00", label:"Light dinner / reflux precautions", on:true },
+  { id:"r6", time:"21:00", label:"5 min breathing + symptom log", on:true },
+];
+
+/* Built-in breathing patterns. Users can add their own (settings.patterns). */
+const BUILTIN_PATTERNS = {
+  '46':  { name:'4–6 breathing', phases:[['in',4],['out',6]] },
+  'box': { name:'Box 4-4-4-4', phases:[['in',4],['hold',4],['out',4],['hold',4]] },
+  '478': { name:'4-7-8 calming', phases:[['in',4],['hold',7],['out',8]] },
+  'coherent': { name:'Coherent 5-5', phases:[['in',5],['out',5]] },
+};
+const CUE = { in:'Breathe in', out:'Breathe out', hold:'Hold' };
+
+const FLAG_LABEL = { cough:'Cough', dizzy:'Dizzy', chestpain:'Chest pain', breathless:'Breathless',
+  flushed:'Hot/flushed face', fainted:'Faint/near-faint', irregular:'Irregular pulse', ventolin:'Ventolin' };
+const RED = ['chestpain','breathless','fainted'];
+
+const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* ------------------------------------------------------------------ storage */
+const LS = {
+  get(k, d){ try{ const v = JSON.parse(localStorage.getItem(k)); return v ?? d; }catch(e){ return d; } },
+  set(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} },
+};
+const DEFAULT_SETTINGS = { theme:'dark', chime:false, vibe:false, voice:false,
+  dur:300, pattern:'46', onboarded:false, patterns:[] };
+const DEFAULT_EMERGENCY = { conditions:'', meds:'', allergies:'', contactName:'', contactPhone:'', notes:'' };
+
+const state = {
+  logs: LS.get('logs', []),
+  reminders: LS.get('reminders', DEFAULT_REMINDERS),
+  settings: Object.assign({}, DEFAULT_SETTINGS, LS.get('settings', {})),
+  care: LS.get('care', []),
+  emergency: Object.assign({}, DEFAULT_EMERGENCY, LS.get('emergency', {})),
+};
+function save(){
+  LS.set('logs', state.logs); LS.set('reminders', state.reminders);
+  LS.set('settings', state.settings); LS.set('care', state.care);
+  LS.set('emergency', state.emergency);
+}
+
+/* All known patterns (builtin + custom), keyed by id. */
+function allPatterns(){
+  const out = Object.assign({}, BUILTIN_PATTERNS);
+  (state.settings.patterns || []).forEach(p => { out[p.id] = { name:p.name, phases:p.phases }; });
+  return out;
+}
+function currentPattern(){
+  const all = allPatterns();
+  return all[state.settings.pattern] || all['46'];
+}
+
+/* ------------------------------------------------------------------ theme */
+function applyTheme(){
+  document.documentElement.dataset.theme = state.settings.theme;
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if(meta) meta.setAttribute('content', state.settings.theme === 'dark' ? '#11161c' : '#eef1f3');
+}
+applyTheme();
+$('themeBtn').onclick = () => {
+  state.settings.theme = state.settings.theme === 'dark' ? 'light' : 'dark';
+  applyTheme(); save();
+};
+
+/* ------------------------------------------------------------------ nav */
+function show(view){
+  document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === 'view-' + view));
+  document.querySelectorAll('nav button').forEach(b => b.classList.toggle('active', b.dataset.view === view));
+  if(view === 'log') stampLog();
+  if(view === 'more'){ renderPrep(); renderTrends(); }
+  if(view === 'palp') renderEmergencyCard();
+  window.scrollTo(0, 0);
+}
+document.querySelectorAll('nav button').forEach(b => b.onclick = () => show(b.dataset.view));
+
+/* ------------------------------------------------------------------ audio / haptics */
+let audioCtx = null;
+function ensureAudio(){
+  try{
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    if(audioCtx.state === 'suspended') audioCtx.resume();
+  }catch(e){ audioCtx = null; }
+  return audioCtx;
+}
+/* Continuous guide tone: rises on inhale, falls on exhale, steady on hold. */
+function guideTone(type, secs){
+  if(!state.settings.chime) return;
+  if(!ensureAudio()) return;
+  const now = audioCtx.currentTime;
+  const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+  o.type = 'sine'; o.connect(g); g.connect(audioCtx.destination);
+  const lo = 320, hi = 480;
+  if(type === 'in'){ o.frequency.setValueAtTime(lo, now); o.frequency.linearRampToValueAtTime(hi, now + secs); }
+  else if(type === 'out'){ o.frequency.setValueAtTime(hi, now); o.frequency.linearRampToValueAtTime(lo, now + secs); }
+  else { o.frequency.setValueAtTime(lo, now); }
+  g.gain.setValueAtTime(0.0001, now);
+  g.gain.exponentialRampToValueAtTime(0.05, now + 0.18);
+  g.gain.setValueAtTime(0.05, now + Math.max(0.25, secs - 0.35));
+  g.gain.exponentialRampToValueAtTime(0.0001, now + secs);
+  o.start(now); o.stop(now + secs + 0.05);
+}
+function completionChime(){
+  if(!state.settings.chime || !ensureAudio()) return;
+  const now = audioCtx.currentTime;
+  [528, 660].forEach((f, i) => {
+    const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.type = 'sine'; o.frequency.value = f; o.connect(g); g.connect(audioCtx.destination);
+    const t = now + i * 0.18;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.05, t + 0.05);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.6);
+    o.start(t); o.stop(t + 0.65);
+  });
+}
+function vibe(ms){ if(state.settings.vibe && navigator.vibrate){ try{ navigator.vibrate(ms); }catch(e){} } }
+function speakCue(type){
+  if(!state.settings.voice || !('speechSynthesis' in window)) return;
+  try{
+    const u = new SpeechSynthesisUtterance(CUE[type]);
+    u.rate = 0.9; u.volume = 0.8; u.pitch = 0.95;
+    speechSynthesis.cancel(); speechSynthesis.speak(u);
+  }catch(e){}
+}
+
+/* ------------------------------------------------------------------ breathing controls */
+function renderPatternButtons(){
+  const wrap = $('patternBtns');
+  const all = allPatterns();
+  wrap.innerHTML = Object.entries(all).map(([id, p]) =>
+    `<button class="btn ${id === state.settings.pattern ? 'on' : ''}" data-pattern="${escHtml(id)}">${escHtml(p.name)}</button>`
+  ).join('');
+  wrap.querySelectorAll('[data-pattern]').forEach(b => b.onclick = () => {
+    state.settings.pattern = b.dataset.pattern; save(); renderPatternButtons();
+  });
+}
+document.querySelectorAll('[data-dur]').forEach(b => b.onclick = () => {
+  document.querySelectorAll('[data-dur]').forEach(x => x.classList.remove('on'));
+  b.classList.add('on'); state.settings.dur = +b.dataset.dur; save();
+});
+function syncBreatheButtons(){
+  document.querySelectorAll('[data-dur]').forEach(x => x.classList.toggle('on', +x.dataset.dur === state.settings.dur));
+  renderPatternButtons();
+  $('toggleChime').textContent = state.settings.chime ? '🔔 Sound on' : '🔕 Sound off';
+  $('toggleChime').classList.toggle('on', state.settings.chime);
+  $('toggleVibe').textContent = state.settings.vibe ? '📳 Vibration on' : '📳 Vibration off';
+  $('toggleVibe').classList.toggle('on', state.settings.vibe);
+  $('toggleVoice').textContent = state.settings.voice ? '🗣 Voice on' : '🗣 Voice off';
+  $('toggleVoice').classList.toggle('on', state.settings.voice);
+}
+$('toggleChime').onclick = () => { state.settings.chime = !state.settings.chime; if(state.settings.chime) ensureAudio(); save(); syncBreatheButtons(); };
+$('toggleVibe').onclick  = () => { state.settings.vibe  = !state.settings.vibe;  save(); syncBreatheButtons(); };
+$('toggleVoice').onclick = () => { state.settings.voice = !state.settings.voice; save(); syncBreatheButtons(); };
+
+/* ------------------------------------------------------------------ breathing engine */
+let breath = null;
+function startBreathing(){
+  ensureAudio(); // resume on the user gesture so the first cue is reliable
+  const pat = currentPattern();
+  const total = state.settings.dur;
+  $('ovPattern').textContent = pat.name;
+  $('overlay').classList.add('show');
+  let remaining = total;
+  let pi = 0, t = pat.phases[0][1];
+  let curScale = 1;
+  $('ovTime').textContent = fmt(remaining);
+  setPhase(pat.phases[0][0], t);
+
+  function setPhase(type, secs){
+    $('ovCue').textContent = CUE[type];
+    if(type === 'in') curScale = 2.0;
+    else if(type === 'out') curScale = 0.85;
+    // 'hold' keeps the current size (fixes the box-breathing jump bug)
+    if(!reduceMotion){
+      $('ovCircle').style.transitionDuration = secs + 's';
+      requestAnimationFrame(() => { $('ovCircle').style.transform = 'scale(' + curScale + ')'; });
+    }
+    guideTone(type, secs); speakCue(type); vibe(type === 'in' ? 60 : type === 'out' ? 40 : 25);
+  }
+
+  breath = setInterval(() => {
+    remaining--; t--;
+    $('ovTime').textContent = fmt(Math.max(remaining, 0));
+    $('ovCnt').textContent = t > 0 ? t : '';
+    if(remaining <= 0){ stopBreathing(true); return; }
+    if(t <= 0){
+      pi = (pi + 1) % pat.phases.length;
+      const [type, secs] = pat.phases[pi]; t = secs; setPhase(type, secs);
+    }
+  }, 1000);
+  $('ovCnt').textContent = t;
+}
+function stopBreathing(done){
+  clearInterval(breath); breath = null;
+  $('ovCircle').style.transitionDuration = '0.6s'; $('ovCircle').style.transform = 'scale(1)';
+  $('overlay').classList.remove('show');
+  if('speechSynthesis' in window){ try{ speechSynthesis.cancel(); }catch(e){} }
+  if(done){ vibe([80, 80, 80]); completionChime(); }
+}
+$('startBreathe').onclick = startBreathing;
+$('palpStartBreathe').onclick = () => { show('breathe'); startBreathing(); };
+$('ovStop').onclick = () => stopBreathing(false);
+
+/* ------------------------------------------------------------------ palpitation */
+$('palpBtn').onclick = () => show('palp');
+$('palpLog').onclick = () => show('log');
+
+/* ------------------------------------------------------------------ quick log */
+const flags = {};
+document.querySelectorAll('[data-flag]').forEach(b => b.onclick = () => {
+  const k = b.dataset.flag; flags[k] = !flags[k];
+  b.classList.toggle('on', flags[k]); b.setAttribute('aria-pressed', String(!!flags[k]));
+});
+function stampLog(){
+  const d = new Date();
+  $('logStamp').textContent = 'Now: ' + d.toLocaleString([], {weekday:'short', hour:'2-digit', minute:'2-digit', day:'numeric', month:'short'});
+}
+$('saveLog').onclick = () => {
+  const entry = {
+    ts: Date.now(),
+    flags: Object.keys(flags).filter(k => flags[k]),
+    pulse: $('logPulse').value || '',
+    stress: $('logStress').value || '',
+    triggers: $('logTriggers').value.trim(),
+    note: $('logNote').value.trim(),
+  };
+  state.logs.unshift(entry); save();
+  Object.keys(flags).forEach(k => flags[k] = false);
+  document.querySelectorAll('[data-flag]').forEach(b => { b.classList.remove('on'); b.setAttribute('aria-pressed','false'); });
+  $('logPulse').value = $('logStress').value = $('logTriggers').value = $('logNote').value = '';
+  pulseTaps = []; renderTapState();
+  renderLogs(); toast('Episode saved'); show('log');
+};
+function renderLogs(){
+  const logList = $('logList');
+  if(!state.logs.length){ logList.innerHTML = '<p class="dim">No episodes logged yet.</p>'; return; }
+  logList.innerHTML = state.logs.map(e => {
+    const d = new Date(e.ts);
+    const when = d.toLocaleString([], {weekday:'short', day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'});
+    const tags = (e.flags || []).map(f => `<span class="tag ${RED.includes(f) ? 'flag' : ''}">${escHtml(FLAG_LABEL[f] || f)}</span>`).join('');
+    const extra = [];
+    if(e.pulse) extra.push('Pulse ' + escHtml(e.pulse));
+    if(e.stress !== '' && e.stress != null) extra.push('Stress ' + escHtml(e.stress) + '/10');
+    if(e.triggers) extra.push(escHtml(e.triggers));
+    return `<div class="logitem"><div class="when">${when}</div>
+      <div>${tags || '<span class="dim">no symptoms ticked</span>'}</div>
+      ${extra.length ? `<div class="dim" style="font-size:.85rem;margin-top:4px">${extra.join(' · ')}</div>` : ''}
+      ${e.note ? `<div style="margin-top:4px">${escHtml(e.note)}</div>` : ''}</div>`;
+  }).join('');
+}
+$('copyLog').onclick = () => copy(logsToText(state.logs, FLAG_LABEL));
+$('csvLog').onclick = () => {
+  const csv = logsToCSV(state.logs, FLAG_LABEL);
+  downloadBlob(csv, 'palpitation-log.csv', 'text/csv');
+};
+
+/* ------------------------------------------------------------------ tap-to-count pulse (upgrade #5) */
+let pulseTaps = [];
+function renderTapState(){
+  const btn = $('tapPulse');
+  const bpm = bpmFromTaps(pulseTaps);
+  if(!pulseTaps.length){
+    btn.innerHTML = '<span class="big">— bpm</span>Tap on each heartbeat';
+  } else {
+    btn.innerHTML = `<span class="big">${bpm ?? '—'} bpm</span>${pulseTaps.length} taps · keep going, tap on each beat`;
+  }
+}
+$('tapPulse').onclick = () => {
+  pulseTaps.push(Date.now());
+  // keep only the last 20 taps so an old first tap doesn't drag the average
+  if(pulseTaps.length > 20) pulseTaps = pulseTaps.slice(-20);
+  renderTapState();
+  const bpm = bpmFromTaps(pulseTaps);
+  if(bpm && pulseTaps.length >= 6) $('logPulse').value = bpm;
+  vibe(10);
+};
+$('tapReset').onclick = () => { pulseTaps = []; $('logPulse').value=''; renderTapState(); };
+
+/* ------------------------------------------------------------------ clipboard / files */
+function copy(text){
+  if(navigator.clipboard){
+    navigator.clipboard.writeText(text).then(() => toast('Copied'), () => prompt('Copy:', text));
+  } else { prompt('Copy:', text); }
+}
+function toast(msg){
+  const t = document.createElement('div'); t.textContent = msg; t.setAttribute('role','status');
+  t.style.cssText = 'position:fixed;bottom:130px;left:50%;transform:translateX(-50%);background:var(--accent);color:var(--accent-ink);padding:10px 18px;border-radius:999px;z-index:80;font-size:.9rem';
+  document.body.appendChild(t); setTimeout(() => t.remove(), 1400);
+}
+function downloadBlob(content, filename, type){
+  const blob = new Blob([content], { type });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = filename; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+/* ------------------------------------------------------------------ care quick-log */
+document.querySelectorAll('[data-care]').forEach(b => b.onclick = () => {
+  state.care.unshift({ ts: Date.now(), item: b.dataset.care }); save();
+  b.classList.add('on'); setTimeout(() => b.classList.remove('on'), 700);
+  toast('Logged: ' + b.dataset.care.split(':')[1]);
+});
+const HYDRO = [
+  { k:'water', t:"I've had water recently" },
+  { k:'urine', t:'Urine is not dark' },
+  { k:'standing', t:'Not dizzy when standing' },
+  { k:'gi', t:'No vomiting / diarrhoea' },
+  { k:'sweat', t:'Not sweating heavily' },
+  { k:'fever', t:'No fever' },
+];
+function renderHydro(){
+  $('hydroChecks').innerHTML = HYDRO.map(h =>
+    `<label class="chk"><input type="checkbox" data-hyd="${h.k}"><span>${h.t}</span></label>`).join('');
+  $('hydroChecks').querySelectorAll('input').forEach(i => i.onchange = updateHydro);
+}
+function updateHydro(){
+  const unchecked = [...$('hydroChecks').querySelectorAll('input')].filter(i => !i.checked).length;
+  const msg = $('hydroMsg');
+  if(unchecked > 0){
+    msg.classList.remove('hidden');
+    msg.innerHTML = 'Some dehydration signs may be present. If so: consider pharmacy oral rehydration solution, mixed exactly as directed. ' +
+      'Do not use electrolyte drinks as a heart treatment. Do not start potassium supplements or salt substitutes unless a clinician advises it.';
+  } else { msg.classList.add('hidden'); }
+}
+
+/* ------------------------------------------------------------------ today plan */
+function renderToday(){
+  const blocks = [
+    ['Morning', ['Drink water','Eat something','5 min 4–6 breathing']],
+    ['Work', ['Keep water bottle visible','Midday 5 min breathing','Gentle 10-min walk if well','Eat if it has been too long']],
+    ['Afternoon', ['Oral rehydration only if dehydration signs are present']],
+    ['Evening', ['Light dinner','No lying down for 3h after eating','5 min breathing before bed','Log symptoms']],
+  ];
+  $('todayPlan').innerHTML = blocks.map(([h, items]) =>
+    `<h3 style="margin-top:10px">${h}</h3><ul style="margin:0;padding-left:18px;font-size:.92rem">${items.map(i => `<li>${i}</li>`).join('')}</ul>`).join('');
+}
+
+/* ------------------------------------------------------------------ reminders */
+function renderReminders(){
+  const list = $('reminderList');
+  list.innerHTML = state.reminders.map(r => `
+    <div class="row" style="align-items:center;margin-bottom:8px">
+      <input type="time" value="${escHtml(r.time)}" data-rid="${r.id}" data-f="time" style="flex:0 0 110px" aria-label="Reminder time">
+      <input type="text" value="${escHtml(r.label)}" data-rid="${r.id}" data-f="label" aria-label="Reminder label">
+      <button class="btn sm ${r.on ? 'on' : ''}" data-toggle="${r.id}" style="flex:0 0 60px">${r.on ? 'On' : 'Off'}</button>
+      <button class="btn sm" data-del="${r.id}" style="flex:0 0 40px" aria-label="Delete reminder">✕</button>
+    </div>`).join('');
+  list.querySelectorAll('input').forEach(i => i.onchange = () => {
+    const r = state.reminders.find(x => x.id === i.dataset.rid); if(r){ r[i.dataset.f] = i.value; save(); }
+  });
+  list.querySelectorAll('[data-toggle]').forEach(b => b.onclick = () => {
+    const r = state.reminders.find(x => x.id === b.dataset.toggle); if(r){ r.on = !r.on; save(); renderReminders(); }
+  });
+  list.querySelectorAll('[data-del]').forEach(b => b.onclick = () => {
+    state.reminders = state.reminders.filter(x => x.id !== b.dataset.del); save(); renderReminders();
+  });
+}
+$('addReminder').onclick = () => {
+  state.reminders.push({ id: 'r' + Date.now(), time: '12:00', label: 'Breathing round + water', on: true });
+  save(); renderReminders();
+};
+$('notifBtn').onclick = async () => {
+  if(!('Notification' in window)){ toast('Notifications not supported'); return; }
+  const p = await Notification.requestPermission();
+  toast(p === 'granted' ? 'Notifications on' : 'Using in-page banner');
+  if(p === 'granted') registerPeriodicReminders();
+};
+/* Best-effort background reminders via the service worker (upgrade #4).
+   Periodic Background Sync is only available on some Chromium browsers and
+   requires an installed PWA; we register it when we can and always keep the
+   in-page ticker as the reliable fallback. */
+async function registerPeriodicReminders(){
+  try{
+    const reg = await navigator.serviceWorker?.ready;
+    if(reg && 'periodicSync' in reg){
+      const status = await navigator.permissions.query({ name: 'periodic-background-sync' });
+      if(status.state === 'granted'){
+        await reg.periodicSync.register('calm-reminders', { minInterval: 15 * 60 * 1000 });
+      }
+    }
+  }catch(e){ /* fallback: in-page ticker below */ }
+}
+let lastFired = {};
+function checkReminders(){
+  const d = new Date();
+  const hhmm = pad2(d.getHours()) + ':' + pad2(d.getMinutes());
+  const key = d.toDateString() + hhmm;
+  state.reminders.forEach(r => {
+    if(r.on && r.time === hhmm && lastFired[r.id] !== key){
+      lastFired[r.id] = key;
+      const msg = r.label + ' — and a quiet sip of water.';
+      if('Notification' in window && Notification.permission === 'granted'){
+        try{ new Notification('Calm', { body: msg, tag: r.id }); }catch(e){ showBanner(msg); }
+      } else { showBanner(msg); }
+    }
+  });
+}
+function showBanner(msg){ $('reminderText').textContent = msg; $('reminderBanner').classList.remove('hidden'); }
+$('reminderDismiss').onclick = () => $('reminderBanner').classList.add('hidden');
+setInterval(checkReminders, 20000);
+
+/* ------------------------------------------------------------------ GP prep + trends */
+function renderPrep(){
+  const a = aggregatePrep(state.logs, state.care, RED);
+  const days = Object.entries(a.byDay).map(([d, n]) => `${d}: ${n}`).join('<br>') || 'none';
+  $('prepSummary').innerHTML = `
+    <div class="dim" style="font-size:.9rem">
+    <b>Total episodes:</b> ${a.total}<br>
+    <b>By day:</b><br>${days}<br>
+    <b>With cough:</b> ${a.withCough} · <b>With hot/flushed face:</b> ${a.withFlush}<br>
+    <b>With red-flag symptom:</b> ${a.withRed} · <b>With Ventolin noted:</b> ${a.withVent}<br>
+    <b>Care/trigger entries logged:</b> ${a.careCount}
+    </div>`;
+}
+$('copyPrep').onclick = () => {
+  const a = aggregatePrep(state.logs, state.care, RED);
+  const careLines = state.care.slice(0, 40).map(c => '  • ' + new Date(c.ts).toLocaleString() + ' — ' + c.item.split(':').slice(1).join(':')).join('\n');
+  const txt = `GP / cardiology prep summary
+============================
+Total palpitation episodes: ${a.total}
+With cough: ${a.withCough}
+With red-flag symptom (chest pain / breathless / faint): ${a.withRed}
+
+${logsToText(state.logs, FLAG_LABEL)}
+
+Care / trigger log (recent)
+${careLines || '  none'}
+
+Questions to ask
+  • 12-lead ECG?
+  • Bloods: FBC, electrolytes (incl. magnesium/calcium), kidney function, thyroid, iron/ferritin?
+  • Repeat/bring forward Holter or event monitoring?
+  • Could asthma, reflux, viral illness, medication, thyroid, anaemia or electrolytes contribute?
+  • Any reason to bring cardiology forward?`;
+  copy(txt);
+};
+
+/* Inline SVG trend chart — no external library (upgrade #1). */
+function barChart(data){
+  const h = 120, pad = 18;
+  const w = Math.max(data.length * 26, 240);
+  const max = Math.max(1, ...data.map(d => d.count));
+  const slot = (w - pad * 2) / data.length;
+  const bw = Math.max(6, slot - 6);
+  let bars = '';
+  data.forEach((d, i) => {
+    const x = pad + i * slot;
+    const bh = (d.count / max) * (h - pad * 2);
+    const y = h - pad - bh;
+    bars += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(bh,0).toFixed(1)}" rx="2" fill="var(--accent)"></rect>`;
+    if(d.count) bars += `<text x="${(x + bw / 2).toFixed(1)}" y="${(y - 3).toFixed(1)}" font-size="9" text-anchor="middle" fill="var(--ink-dim)">${d.count}</text>`;
+    if(i % 2 === 0) bars += `<text x="${(x + bw / 2).toFixed(1)}" y="${h - 5}" font-size="8" text-anchor="middle" fill="var(--ink-dim)">${d.label}</text>`;
+  });
+  return `<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" role="img" aria-label="Episodes per day, last ${data.length} days">${bars}<line x1="${pad}" y1="${h - pad}" x2="${w - pad}" y2="${h - pad}" stroke="var(--line)"/></svg>`;
+}
+function renderTrends(){
+  const wrap = $('trends');
+  if(!state.logs.length){ wrap.innerHTML = '<p class="dim">Log a few episodes to see trends here.</p>'; return; }
+  const data = dailyCounts(state.logs, 14, Date.now());
+  const avgPulse = average(state.logs.map(e => e.pulse));
+  const avgStress = average(state.logs.map(e => e.stress));
+  const last7 = data.slice(-7).reduce((s, d) => s + d.count, 0);
+  wrap.innerHTML = `
+    <div class="chartwrap">${barChart(data)}</div>
+    <div class="stat-row">
+      <div class="stat"><div class="v">${last7}</div><div class="k">episodes · last 7 days</div></div>
+      <div class="stat"><div class="v">${avgPulse != null ? Math.round(avgPulse) : '—'}</div><div class="k">avg pulse (bpm)</div></div>
+      <div class="stat"><div class="v">${avgStress != null ? avgStress.toFixed(1) : '—'}</div><div class="k">avg stress /10</div></div>
+    </div>`;
+}
+
+/* ------------------------------------------------------------------ custom patterns (upgrade #6) */
+function renderCustomPatterns(){
+  const wrap = $('customPatterns');
+  const custom = state.settings.patterns || [];
+  wrap.innerHTML = (custom.length ? custom.map(p =>
+    `<div class="row" style="align-items:center;margin-bottom:8px">
+      <span style="flex:1">${escHtml(p.name)} <span class="dim">(${escHtml(phasesToString(p.phases))})</span></span>
+      <button class="btn sm" data-delpat="${escHtml(p.id)}" style="flex:0 0 40px" aria-label="Delete pattern">✕</button>
+    </div>`).join('') : '<p class="dim" style="font-size:.85rem">No custom patterns yet.</p>');
+  wrap.querySelectorAll('[data-delpat]').forEach(b => b.onclick = () => {
+    state.settings.patterns = (state.settings.patterns || []).filter(p => p.id !== b.dataset.delpat);
+    if(!allPatterns()[state.settings.pattern]) state.settings.pattern = '46';
+    save(); renderCustomPatterns(); syncBreatheButtons();
+  });
+}
+$('addPattern').onclick = () => {
+  const name = $('patName').value.trim();
+  const phases = parsePattern($('patPhases').value);
+  if(!name){ toast('Name the pattern'); return; }
+  if(!phases){ toast('Use e.g. in:4, hold:4, out:6'); return; }
+  state.settings.patterns = state.settings.patterns || [];
+  state.settings.patterns.push({ id: 'p' + Date.now(), name, phases });
+  $('patName').value = ''; $('patPhases').value = '';
+  save(); renderCustomPatterns(); syncBreatheButtons(); toast('Pattern added');
+};
+
+/* ------------------------------------------------------------------ emergency info (upgrade #8) */
+const EMERG_FIELDS = [
+  ['conditions','Conditions'], ['meds','Current medications'], ['allergies','Allergies'],
+  ['contactName','Emergency contact name'], ['contactPhone','Emergency contact phone'], ['notes','Other notes'],
+];
+function renderEmergencyForm(){
+  $('emergForm').innerHTML = EMERG_FIELDS.map(([k, label]) => {
+    const v = escHtml(state.emergency[k] || '');
+    const input = k === 'contactPhone'
+      ? `<input type="tel" data-emerg="${k}" value="${v}">`
+      : (k === 'notes' || k === 'conditions' || k === 'meds'
+        ? `<textarea data-emerg="${k}">${v}</textarea>`
+        : `<input type="text" data-emerg="${k}" value="${v}">`);
+    return `<div class="field"><label>${label}</label>${input}</div>`;
+  }).join('');
+  $('emergForm').querySelectorAll('[data-emerg]').forEach(i => i.oninput = () => {
+    state.emergency[i.dataset.emerg] = i.value; save(); renderEmergencyCard();
+  });
+}
+function renderEmergencyCard(){
+  const e = state.emergency;
+  const has = Object.values(e).some(v => v && v.trim());
+  const box = $('emergCard');
+  if(!has){ box.innerHTML = '<p class="dim" style="font-size:.85rem">Add your emergency info in More → Emergency info so it is here when you need it.</p>'; return; }
+  const rows = [];
+  if(e.conditions) rows.push(`<b>Conditions:</b> ${escHtml(e.conditions)}`);
+  if(e.meds) rows.push(`<b>Meds:</b> ${escHtml(e.meds)}`);
+  if(e.allergies) rows.push(`<b>Allergies:</b> ${escHtml(e.allergies)}`);
+  if(e.contactName || e.contactPhone) rows.push(`<b>Contact:</b> ${escHtml(e.contactName)} ${e.contactPhone ? `<a href="tel:${escHtml(e.contactPhone)}" style="color:inherit">${escHtml(e.contactPhone)}</a>` : ''}`);
+  if(e.notes) rows.push(`<b>Notes:</b> ${escHtml(e.notes)}`);
+  box.innerHTML = `<div class="emerg">${rows.join('<br>')}</div>`;
+}
+
+/* ------------------------------------------------------------------ resources */
+function renderRes(){
+  $('resList').innerHTML = RESOURCES.map(r =>
+    `<a class="res" href="${escHtml(r.url)}" target="_blank" rel="noopener">${escHtml(r.title)}<small class="dim">${escHtml(r.note)}</small></a>`).join('');
+}
+
+/* ------------------------------------------------------------------ export / import (upgrades #2 & #10) */
+function bundle(){
+  return { app:'heart-calm', v:1, exportedAt:new Date().toISOString(),
+    logs:state.logs, care:state.care, reminders:state.reminders,
+    settings:state.settings, emergency:state.emergency };
+}
+function applyBundle(b){
+  if(!b || b.app !== 'heart-calm') throw new Error('Not a Calm backup file');
+  state.logs = Array.isArray(b.logs) ? b.logs : state.logs;
+  state.care = Array.isArray(b.care) ? b.care : state.care;
+  state.reminders = Array.isArray(b.reminders) ? b.reminders : state.reminders;
+  state.settings = Object.assign({}, DEFAULT_SETTINGS, b.settings || {});
+  state.emergency = Object.assign({}, DEFAULT_EMERGENCY, b.emergency || {});
+  save();
+  applyTheme(); renderAll();
+}
+$('exportData').onclick = () => {
+  downloadBlob(JSON.stringify(bundle(), null, 2), 'calm-backup.json', 'application/json');
+};
+$('importData').onclick = () => $('importFile').click();
+$('importFile').onchange = async (ev) => {
+  const file = ev.target.files[0]; if(!file) return;
+  try{
+    const text = await file.text();
+    let data = JSON.parse(text);
+    if(data.enc){
+      const pass = prompt('This backup is encrypted. Enter the passphrase:');
+      if(pass == null) return;
+      data = await decryptData(data, pass);
+    }
+    if(!confirm('Replace all current data with this backup?')) return;
+    applyBundle(data); toast('Backup restored');
+  }catch(e){ toast('Could not import: ' + (e.message || 'bad file')); }
+  finally{ ev.target.value = ''; }
+};
+
+/* Encrypted backup — passphrase-derived AES-GCM via Web Crypto (upgrade #10).
+   This is the privacy-preserving core of optional sync: data is encrypted
+   client-side before it ever leaves the device. Full multi-device sync would
+   add a storage backend; the encrypted file already enables safe transfer. */
+const b64 = u8 => btoa(String.fromCharCode(...u8));
+const ub64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+async function deriveKey(pass, salt){
+  const km = await crypto.subtle.importKey('raw', new TextEncoder().encode(pass), 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey({ name:'PBKDF2', salt, iterations:150000, hash:'SHA-256' },
+    km, { name:'AES-GCM', length:256 }, false, ['encrypt','decrypt']);
+}
+async function encryptData(obj, pass){
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const key = await deriveKey(pass, salt);
+  const ct = await crypto.subtle.encrypt({ name:'AES-GCM', iv }, key, new TextEncoder().encode(JSON.stringify(obj)));
+  return { app:'heart-calm', enc:true, v:1, salt:b64(salt), iv:b64(iv), ct:b64(new Uint8Array(ct)) };
+}
+async function decryptData(blobObj, pass){
+  const key = await deriveKey(pass, ub64(blobObj.salt));
+  const pt = await crypto.subtle.decrypt({ name:'AES-GCM', iv:ub64(blobObj.iv) }, key, ub64(blobObj.ct));
+  return JSON.parse(new TextDecoder().decode(pt));
+}
+$('exportEnc').onclick = async () => {
+  if(!crypto.subtle){ toast('Encryption not available here'); return; }
+  const pass = prompt('Choose a passphrase for this encrypted backup.\nYou will need it to restore — it cannot be recovered.');
+  if(!pass){ return; }
+  try{
+    const enc = await encryptData(bundle(), pass);
+    downloadBlob(JSON.stringify(enc, null, 2), 'calm-backup.enc.json', 'application/json');
+    toast('Encrypted backup saved');
+  }catch(e){ toast('Encryption failed'); }
+};
+
+/* ------------------------------------------------------------------ clear data */
+$('clearData').onclick = () => {
+  if(confirm('Delete all logs, reminders, settings and emergency info on this device? This cannot be undone.')){
+    const theme = state.settings.theme;
+    localStorage.clear();
+    state.logs = []; state.care = [];
+    state.reminders = JSON.parse(JSON.stringify(DEFAULT_REMINDERS));
+    state.settings = Object.assign({}, DEFAULT_SETTINGS, { theme, onboarded:true });
+    state.emergency = Object.assign({}, DEFAULT_EMERGENCY);
+    save(); renderAll(); toast('Cleared');
+  }
+};
+
+/* ------------------------------------------------------------------ onboarding (upgrade #8) */
+function maybeOnboard(){
+  if(state.settings.onboarded) return;
+  $('onboard').classList.add('show');
+}
+$('onboardClose').onclick = () => {
+  state.settings.onboarded = true; save();
+  $('onboard').classList.remove('show');
+};
+
+/* ------------------------------------------------------------------ i18n scaffold (upgrade #7)
+   Minimal string table + t(). English only for now; structure lets a
+   translator add locales without touching logic. Most static copy lives in
+   index.html; dynamic strings funnel through here over time. */
+const STRINGS = { en: { copied:'Copied', saved:'Episode saved', cleared:'Cleared' } };
+const LANG = (navigator.language || 'en').slice(0, 2);
+export function t(key){ return (STRINGS[LANG] && STRINGS[LANG][key]) || STRINGS.en[key] || key; }
+
+/* ------------------------------------------------------------------ init */
+function renderAll(){
+  renderToday(); renderLogs(); renderReminders(); renderRes(); renderHydro();
+  renderTrends(); renderCustomPatterns(); renderEmergencyForm(); renderEmergencyCard();
+  syncBreatheButtons(); stampLog(); renderTapState();
+}
+renderAll();
+maybeOnboard();
+
+/* PWA — register service worker for offline / installability */
+if('serviceWorker' in navigator){
+  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+}
