@@ -78,6 +78,10 @@
       shortness of breath, fainting or near-fainting, severe dizziness, or palpitations that won't settle and feel wrong.</p>
     </div>
 
+    <!-- Panic-state: emergency guidance is one tap away, never buried -->
+    <button class="cta" id="palpHelpNow" style="background:var(--danger);color:#fff">🆘  I need help now</button>
+    <div id="palpHelpDetail" class="alert-card is-000 hidden" style="margin-top:10px" role="status"></div>
+
     <!-- Episode timer — capture exact duration, the single most useful field for a cardiologist -->
     <div class="card" id="episodeTimerCard">
       <h2>Time this episode</h2>
@@ -295,6 +299,7 @@
   <section class="view" id="view-more" aria-label="More">
     <div class="card">
       <h2>Trends</h2>
+      <p class="dim" style="font-size:.85rem" id="trendsGuard"></p>
       <div id="trends"></div>
     </div>
 
@@ -390,6 +395,43 @@
   </div>
   <div class="pill" id="ovPattern">4–6 breathing</div>
   <button class="cta secondary" id="ovStop" style="max-width:320px">Finish</button>
+</div>
+
+<!-- post-save calm handoff: capture enough, then get off the phone -->
+<div class="modal" id="calmHandoff" role="dialog" aria-label="Episode saved">
+  <div class="sheet">
+    <div id="calmStage1">
+      <h2 id="calmSavedMsg"></h2>
+      <div class="stack">
+        <button class="cta" id="calmDone">Done — put phone down</button>
+        <button class="cta secondary" id="calmDetails">Add details later</button>
+        <button class="cta secondary" id="calmBreathe">Start 1 min breathing</button>
+      </div>
+      <details class="prayer" id="prayerCard">
+        <summary>Prayer for steadiness</summary>
+        <p id="prayerText"></p>
+      </details>
+    </div>
+    <div id="calmStage2" class="hidden">
+      <h2 id="calmDoneMsg"></h2>
+      <p class="dim" id="calmDoneSafety" style="font-size:.9rem"></p>
+      <button class="cta" id="calmClose" style="margin-top:6px">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- repeated-checking guardrail: gentle, non-shaming, never traps or blocks help -->
+<div class="modal" id="guardrail" role="dialog" aria-label="Checking in">
+  <div class="sheet">
+    <h2 id="guardrailMsg"></h2>
+    <div class="stack">
+      <button class="cta secondary" id="grEmergency">I have emergency symptoms</button>
+      <button class="cta secondary" id="grSameday">I need same-day advice</button>
+      <button class="cta" id="grEnough">I've logged enough — close app</button>
+      <button class="btn" id="grContinue">Continue anyway</button>
+    </div>
+    <div id="grDetail" class="alert-card hidden" style="margin-top:12px" role="status"></div>
+  </div>
 </div>
 
 <!-- onboarding -->

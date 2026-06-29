@@ -6,6 +6,7 @@ import {
   fmt, pad2, escHtml, logsToText, logsToCSV, aggregatePrep, gpStats,
   bpmFromTaps, dailyCounts, average, parsePattern, phasesToString, icsForReminders,
   bucketForDuration, escalationLevel,
+  recentOpens, shouldShowGuardrail, CALM_COPY,
 } from './pure.js';
 
 const $ = id => document.getElementById(id);
@@ -66,6 +67,72 @@ function renderAlert(el, result){
   el.classList.add(result.level === '000' ? 'is-000' : 'is-sameday');
   el.innerHTML = '<p>' + ESC_MSG[result.level] + '</p>';
 }
+
+/* ------------------------------------------------------------------ anti-spiral
+   "Help me calm down, capture what a doctor needs, then get me off the phone."
+   Post-save calm handoff + a gentle repeated-checking guardrail + a panic-state
+   help button. No diagnosis, scores, predictions or correlation dashboards. */
+function openModal(id){ $(id).classList.add('show'); }
+function closeModal(id){ $(id).classList.remove('show'); }
+function fillAlert(el, level, text){
+  el.classList.remove('hidden', 'is-000', 'is-sameday');
+  if(level) el.classList.add(level === '000' ? 'is-000' : 'is-sameday');
+  el.innerHTML = '<p>' + escHtml(text) + '</p>';
+}
+
+// post-save calm handoff
+function openCalmHandoff(){
+  $('calmSavedMsg').textContent = CALM_COPY.saved;
+  $('prayerText').textContent = CALM_COPY.prayer;
+  $('calmDoneMsg').textContent = CALM_COPY.doneTitle;
+  $('calmDoneSafety').textContent = CALM_COPY.doneSafety;
+  $('prayerCard').open = false;
+  $('calmStage1').classList.remove('hidden');
+  $('calmStage2').classList.add('hidden');
+  openModal('calmHandoff');
+}
+function showCalmFinal(title, safety){
+  $('calmDoneMsg').textContent = title;
+  $('calmDoneSafety').textContent = safety || '';
+  $('calmStage1').classList.add('hidden');
+  $('calmStage2').classList.remove('hidden');
+  openModal('calmHandoff');
+}
+$('calmDone').onclick = () => showCalmFinal(CALM_COPY.doneTitle, CALM_COPY.doneSafety);
+$('calmClose').onclick = () => closeModal('calmHandoff');
+$('calmDetails').onclick = () => { closeModal('calmHandoff'); show('log'); };
+$('calmBreathe').onclick = () => { closeModal('calmHandoff'); show('breathe'); startBreathing(60); };
+
+// repeated-checking guardrail — gentle, non-shaming, never blocks help or traps
+let guardrailDismissed = false;
+function openGuardrail(){
+  $('guardrailMsg').textContent = CALM_COPY.guardrail;
+  renderAlert($('grDetail'), null);
+  openModal('guardrail');
+}
+$('grEmergency').onclick = () => fillAlert($('grDetail'), '000', CALM_COPY.emergency);
+$('grSameday').onclick   = () => fillAlert($('grDetail'), 'sameday', CALM_COPY.sameday);
+$('grEnough').onclick    = () => { guardrailDismissed = true; closeModal('guardrail'); showCalmFinal(CALM_COPY.loggedEnough, ''); };
+$('grContinue').onclick  = () => { guardrailDismissed = true; closeModal('guardrail'); };
+
+function recordOpenAndMaybeGuard(){
+  const now = Date.now();
+  const opens = recentOpens([...LS.get('opens', []), now], now);
+  LS.set('opens', opens);
+  if(guardrailDismissed || !state.settings.onboarded) return;
+  if(document.querySelector('.modal.show')) return; // don't stack over onboarding/handoff
+  if(shouldShowGuardrail(opens, now)) openGuardrail();
+}
+document.addEventListener('visibilitychange', () => {
+  if(document.visibilityState === 'visible') recordOpenAndMaybeGuard();
+});
+
+// panic-state: emergency guidance one tap away on the palpitation screen
+$('palpHelpNow').onclick = () => {
+  const d = $('palpHelpDetail');
+  const nowHidden = d.classList.toggle('hidden');
+  if(!nowHidden){ d.innerHTML = '<p>' + escHtml(CALM_COPY.emergency) + '</p>'; vibe(30); }
+};
 
 const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -217,10 +284,10 @@ function applyDim(){ $('overlay').classList.toggle('dim', !!state.settings.dim);
 
 /* ------------------------------------------------------------------ breathing engine */
 let breath = null;
-function startBreathing(){
+function startBreathing(overrideDur){
   ensureAudio(); // resume on the user gesture so the first cue is reliable
   const pat = currentPattern();
-  const total = state.settings.dur;
+  const total = overrideDur || state.settings.dur;
   $('ovPattern').textContent = pat.name;
   applyDim();
   $('overlay').classList.add('show');
@@ -402,7 +469,7 @@ $('saveLog').onclick = () => {
   renderAlert($('redflagAlert'), null);
   resetTimerUI();
   pulseTaps = []; renderTapState();
-  renderLogs(); toast('Episode saved'); show('log');
+  renderLogs(); show('log'); openCalmHandoff();
 };
 function renderLogs(){
   const logList = $('logList');
@@ -689,6 +756,7 @@ function barChart(data){
   return `<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" role="img" aria-label="Episodes per day, last ${data.length} days">${bars}<line x1="${pad}" y1="${h - pad}" x2="${w - pad}" y2="${h - pad}" stroke="var(--line)"/></svg>`;
 }
 function renderTrends(){
+  $('trendsGuard').textContent = CALM_COPY.trends;
   const wrap = $('trends');
   if(!state.logs.length){ wrap.innerHTML = '<p class="dim">Log a few episodes to see trends here.</p>'; return; }
   const data = dailyCounts(state.logs, 14, Date.now());
@@ -878,6 +946,7 @@ function renderAll(){
 }
 renderAll();
 maybeOnboard();
+recordOpenAndMaybeGuard();
 
 /* PWA — register service worker for offline / installability */
 if('serviceWorker' in navigator){

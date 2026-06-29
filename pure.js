@@ -186,6 +186,43 @@ export function bucketForDuration(sec){
   return '>15 min';
 }
 
+/* ---------------------------------------------------------------- anti-spiral
+   Help the user calm down, capture what a doctor needs, then get off the phone.
+   These keep app-open tracking and the guardrail threshold pure/testable. */
+
+/* App-open timestamps within the last `windowMs` (default 1 hour). Also prunes
+   stale entries — used both to decide the guardrail and to keep the list small. */
+export function recentOpens(times, nowMs, windowMs = 3600000){
+  return (times || []).filter(t => typeof t === 'number' && t > nowMs - windowMs && t <= nowMs);
+}
+/* Show the gentle "you've checked a few times" guardrail after MORE THAN
+   `threshold` opens in the window (default: >3 in 60 min). */
+export function shouldShowGuardrail(times, nowMs, windowMs = 3600000, threshold = 3){
+  return recentOpens(times, nowMs, windowMs).length > threshold;
+}
+
+/* All calm-handoff / guardrail copy lives here so the wording is single-sourced
+   and unit-testable. It stays clinically humble: it never tells the user they
+   are "safe", that this is "benign", or that it was "just anxiety". */
+export const CALM_COPY = {
+  saved:       "Episode saved. You've captured enough for now.",
+  doneTitle:   "Good. You've recorded what a doctor needs for now. Feet on the floor, slow exhale, phone down.",
+  doneSafety:  "If emergency symptoms appear or things worsen, use the safety guidance and seek help.",
+  guardrail:   "You've checked this a few times. Pause for one breath. Are you needing care, or reassurance?",
+  loggedEnough:"You've captured enough. Take one slow breath out, put the phone down, and do the next small steady thing.",
+  emergency:   "Call 000 now if palpitations come with chest pain, chest pressure or tightness, severe shortness of breath, fainting, blackouts, severe dizziness, new confusion, pain or tightness spreading to your jaw, back, neck, arm or stomach, or symptoms that are getting worse or will not settle. Do not drive yourself.",
+  sameday:     "This may need medical review today. Call your GP, an urgent care service, or Healthdirect on 1800 022 222. If symptoms worsen or emergency signs appear, call 000.",
+  trends:      "Use this as a weekly review for your GP or cardiologist, not a minute-by-minute reassurance check. Patterns are not proof of cause.",
+  prayer:      "Lord, help me receive this moment with courage and wisdom. Help me seek help if I need it, breathe slowly if I can, and entrust what I cannot control to You.",
+};
+/* Reassurance phrases the app must never use (a clinically-humble guardrail).
+   'safe' is intentionally excluded as a bare token because 'safety' is legitimate. */
+export const BANNED_REASSURANCE = ['benign', 'you are safe', "you're safe", 'just anxiety', 'nothing is wrong', 'all in your head'];
+export function hasBannedReassurance(text){
+  const t = String(text).toLowerCase();
+  return BANNED_REASSURANCE.some(p => t.includes(p));
+}
+
 /* Symptoms that, on their own, warrant calling 000. Deliberately does NOT
    include 'irregular' or 'dizzy' alone — per RACGP/Healthdirect, irregular
    pulse alone is a same-day review, but irregular + chest pain is urgent. */

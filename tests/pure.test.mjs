@@ -4,6 +4,7 @@ import {
   fmt, pad2, escHtml, logsToText, logsToCSV, CSV_HEAD, aggregatePrep,
   bpmFromTaps, dailyCounts, average, parsePattern, phasesToString,
   topTriggers, gpStats, icsForReminders, bucketForDuration, escalationLevel,
+  recentOpens, shouldShowGuardrail, CALM_COPY, hasBannedReassurance,
 } from '../pure.js';
 
 const FLAG_LABEL = { cough:'Cough', chestpain:'Chest pain', ventolin:'Ventolin' };
@@ -183,6 +184,38 @@ test('logsToCSV includes exact duration_sec column', () => {
   const lines = csv.split('\n');
   assert.ok(lines[0].includes('"duration_sec"'));
   assert.ok(lines[1].includes('"142"'));
+});
+
+test('recentOpens keeps only opens within the last 60 minutes', () => {
+  const now = 10_000_000;
+  const hour = 3600000;
+  const times = [now, now - 10 * 60000, now - 59 * 60000, now - 61 * 60000, now - 3 * hour];
+  const recent = recentOpens(times, now);
+  assert.equal(recent.length, 3);              // drops the two older than 60 min
+  assert.ok(recent.every(t => t > now - hour));
+  assert.deepEqual(recentOpens([], now), []);
+  assert.deepEqual(recentOpens(null, now), []);
+});
+
+test('shouldShowGuardrail fires only above 3 opens in the window', () => {
+  const now = 10_000_000;
+  const mk = n => Array.from({ length: n }, (_, i) => now - i * 60000); // n opens, 1 min apart
+  assert.equal(shouldShowGuardrail(mk(3), now), false); // exactly 3 -> no
+  assert.equal(shouldShowGuardrail(mk(4), now), true);  // 4 -> yes
+  assert.equal(shouldShowGuardrail(mk(1), now), false);
+  // opens outside the window don't count toward the threshold
+  const old = Array.from({ length: 5 }, (_, i) => now - (2 * 3600000 + i * 60000));
+  assert.equal(shouldShowGuardrail(old, now), false);
+});
+
+test('calm copy avoids prohibited reassurance wording', () => {
+  Object.values(CALM_COPY).forEach(msg => {
+    assert.equal(hasBannedReassurance(msg), false, `prohibited wording in: ${msg}`);
+  });
+  // sanity-check the detector actually catches the banned phrases
+  assert.equal(hasBannedReassurance('this is benign, you are safe'), true);
+  assert.equal(hasBannedReassurance('it was just anxiety'), true);
+  assert.equal(hasBannedReassurance('use the safety guidance'), false); // 'safety' is allowed
 });
 
 test('logsToText handles empty and populated logs', () => {

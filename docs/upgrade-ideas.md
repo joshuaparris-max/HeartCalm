@@ -186,14 +186,37 @@ cases, and the `duration_sec` CSV column).
   context, and **medication/reliever/substance context** (record-only, never advice).
 - **R3 — Cardiology appointment mode:** appointment date/countdown, questions-to-ask, prior-testing
   summary, HeartBug/Holter dates + recording-gap notes, a one-page cardiology summary + appendix.
-- **R4 — Anti-spiral + calm:** "you've captured enough — phone down", repeated-checking nudge,
-  trends behind a weekly-review gate, optional faith comfort card, expanded breathing menu,
-  panic-state simplified UI.
+- **R4 — Anti-spiral + calm:** ✅ shipped (see Round 4 below).
 - **R5 — Hardening:** schema versioning, backup import validation, export/privacy warnings, a
   test guarding against prohibited reassurance wording ("benign"/"safe"/"just anxiety").
 - **Explicitly out of scope** (from the PDF review): ECG/rhythm interpretation, "benign/safe"
   labels, supplement/electrolyte advice, beta-blocker/asthma med suggestions, wearable/Health-Connect
   import, cloud sync, AI medical chat, risk scores, and a default correlation dashboard.
+
+## Round 4 — anti-spiral guardrails + panic-state UI (2026-06-29)
+
+Built next (ahead of more logging fields) on the principle: **"help me calm down, capture
+what a doctor needs, then get me off the phone."** The risk this addresses is the app becoming
+a reassurance-checking loop. **Release 4 of 5 — shipped.**
+
+1. **Post-save calm handoff.** Saving an episode now opens a calm card — *"Episode saved. You've
+   captured enough for now."* — with three paths: **Done — put phone down** (primary),
+   *Add details later*, *Start 1 min breathing*. "Done" shows a final steadying card.
+2. **Repeated-checking guardrail.** App opens are tracked in `localStorage` (pruned to the last
+   60 min). After **>3 opens in an hour** a gentle, non-shaming card asks *"needing care, or
+   reassurance?"* with four non-trapping options: emergency guidance (Level 1), same-day guidance
+   (Level 2 + Healthdirect), *I've logged enough — close*, or *Continue anyway* (session-only
+   dismiss). Emergency access is never blocked.
+3. **Panic-state help.** A prominent **🆘 I need help now** button at the top of the palpitation
+   screen reveals the full Level 1 emergency guidance — never buried in educational copy.
+4. **Trends guardrail.** Trends now lead with *"Use this as a weekly review… not a minute-by-minute
+   reassurance check. Patterns are not proof of cause."* No correlations/risk scores/predictions.
+5. **Optional faith comfort.** A collapsible *Prayer for steadiness* card on the calm handoff —
+   off by default, and it never replaces or precedes safety guidance.
+
+All calm/guardrail wording is single-sourced in `pure.js` (`CALM_COPY`) and unit-tested against a
+prohibited-reassurance list (no "benign", "you are safe", "just anxiety", "nothing is wrong").
+Test suite **20 → 23** (`recentOpens`, `shouldShowGuardrail`, prohibited-wording guard).
 
 ### Deploy notes
 - Static site; `vercel.json` sets `no-cache` on `sw.js` and `manifest.json`.

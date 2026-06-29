@@ -115,6 +115,10 @@ nav button.active{color:var(--accent)}
 .modal.show{display:flex}
 .modal .sheet{background:var(--card); border:1px solid var(--line); border-radius:var(--radius);
   padding:22px; max-width:440px; width:100%; box-shadow:var(--shadow); max-height:90vh; overflow:auto}
+.stack{display:flex; flex-direction:column; gap:10px; margin-top:10px}
+.prayer{margin-top:16px; border:1px solid var(--line); border-radius:12px; padding:10px 14px; background:var(--card2)}
+.prayer summary{cursor:pointer; font-weight:600; color:var(--ink)}
+.prayer p{margin:10px 0 0; font-size:.92rem; color:var(--ink-dim); font-style:italic}
 
 /* log list */
 .logitem{border:1px solid var(--line); border-radius:12px; padding:12px; margin-bottom:10px; background:var(--card2)}
