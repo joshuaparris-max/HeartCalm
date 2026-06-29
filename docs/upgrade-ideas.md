@@ -181,9 +181,7 @@ Test suite expanded to **20 passing tests** (added `bucketForDuration`, four `es
 cases, and the `duration_sec` CSV column).
 
 ### Remaining backlog (Releases 2–5, not yet built)
-- **R2 — Two-stage episode diary:** "save basics now" vs "add detail when settled"; onset/offset
-  (sudden/gradual), sensation chips (skipped/racing/fluttering/pounding), reflux/meal/sleep
-  context, and **medication/reliever/substance context** (record-only, never advice).
+- **R2 — Two-stage episode diary:** ✅ shipped (see Round 5 below).
 - **R3 — Cardiology appointment mode:** appointment date/countdown, questions-to-ask, prior-testing
   summary, HeartBug/Holter dates + recording-gap notes, a one-page cardiology summary + appendix.
 - **R4 — Anti-spiral + calm:** ✅ shipped (see Round 4 below).
@@ -217,6 +215,36 @@ a reassurance-checking loop. **Release 4 of 5 — shipped.**
 All calm/guardrail wording is single-sourced in `pure.js` (`CALM_COPY`) and unit-tested against a
 prohibited-reassurance list (no "benign", "you are safe", "just anxiety", "nothing is wrong").
 Test suite **20 → 23** (`recentOpens`, `shouldShowGuardrail`, prohibited-wording guard).
+
+## Round 5 — two-stage episode diary + medication context (R2) (2026-06-29)
+
+Splits the log so it captures what a GP/cardiologist needs without a wall-of-form during
+symptoms: **"save basics now"** → **"add details when settled"**. **Release 2 of 5 — shipped.**
+
+- **Stage 1 (fast):** sensation chips (skipped/racing/fluttering/pounding/…), rhythm feel
+  (regular/irregular/changing), duration (timer-filled or manual), breathing response
+  (helped → made worse). Context lives behind an optional "Where/what were you doing?"
+  disclosure so the first screen stays calm. Nothing is required; `Save basics now` is one tap.
+- **Stage 2 (optional, when settled):** opened from the calm handoff (*Add details*) or any
+  history row (`+ details` / `Details ✓`). Captures onset/offset, a full associated-symptom set,
+  **Medication & reliever context** (reliever used/type/time, preventer, cold-flu, decongestant,
+  ADHD med, antidepressant change, caffeine/alcohol/nicotine/supplement/new-med), and **stress
+  context** (before/during 0–10, panic-after, emotional-stress-nearby).
+- **Escalation stays correct:** Stage-2 associated symptoms feed the same three-level logic —
+  `radiating` (jaw/back/neck/arm/stomach) and `confusion` added as 000 signals; **mild**
+  breathlessness and any medication/substance context never trigger 000; irregular-alone stays
+  same-day.
+- **Clinically humble copy:** medication section says *record, don't change anything without your
+  GP/cardiologist/pharmacist*; stress section says logging stress *"does not mean the episode was
+  'just anxiety'"*. Exports use *"recorded near episode, not a cause"* language.
+- **Schema & migration:** `schemaVersion = 2`; `normalizeEntry`/`normalizeLogs` add new fields to
+  old entries on load without data loss — old logs render and export unchanged. Text + CSV exports
+  extended (CSV gains sensation, rhythm_feel, episode_context, onset/offset, associated_symptoms,
+  reliever_*/medication_context, stress_before/during, etc.).
+
+No diagnosis, risk scores, predictions, correlation dashboards, or medicine/dose advice were added.
+Test suite **23 → 30** (`normalizeEntry`/`normalizeLogs`, `entrySymptoms`, escalation for
+associated/medication/exercise cases, CSV medication+onset/offset, cautious-wording export).
 
 ### Deploy notes
 - Static site; `vercel.json` sets `no-cache` on `sw.js` and `manifest.json`.

@@ -7,6 +7,7 @@ import {
   bpmFromTaps, dailyCounts, average, parsePattern, phasesToString, icsForReminders,
   bucketForDuration, escalationLevel,
   recentOpens, shouldShowGuardrail, CALM_COPY,
+  SCHEMA_VERSION, normalizeEntry, normalizeLogs, entrySymptoms, entryReliever,
 } from './pure.js';
 
 const $ = id => document.getElementById(id);
@@ -50,7 +51,11 @@ const CUE = { in:'Breathe in', out:'Breathe out', hold:'Hold' };
 
 const FLAG_LABEL = { cough:'Cough', dizzy:'Dizzy', chestpain:'Chest pain', breathless:'Breathless',
   wheeze:'Wheeze', tightchest:'Tight chest', flushed:'Hot/flushed face', fainted:'Faint/near-faint',
-  irregular:'Irregular pulse', ventolin:'Ventolin' };
+  irregular:'Irregular pulse', ventolin:'Ventolin',
+  // Stage-2 associated symptoms
+  breathless_mild:'Mild breathlessness', sweating:'Sweating/clammy', nausea:'Nausea',
+  radiating:'Radiating pain', confusion:'Confusion', reflux:'Reflux/indigestion',
+  chestwall:'Chest wall/rib pain', headache:'Headache', tingling:'Tingling/numbness' };
 const RED = ['chestpain','breathless','fainted'];
 
 /* Three-level escalation messaging. The decision logic lives in pure.js
@@ -100,7 +105,7 @@ function showCalmFinal(title, safety){
 }
 $('calmDone').onclick = () => showCalmFinal(CALM_COPY.doneTitle, CALM_COPY.doneSafety);
 $('calmClose').onclick = () => closeModal('calmHandoff');
-$('calmDetails').onclick = () => { closeModal('calmHandoff'); show('log'); };
+$('calmDetails').onclick = () => { closeModal('calmHandoff'); show('log'); openDetailForm(lastSavedTs); };
 $('calmBreathe').onclick = () => { closeModal('calmHandoff'); show('breathe'); startBreathing(60); };
 
 // repeated-checking guardrail — gentle, non-shaming, never blocks help or traps
@@ -401,32 +406,43 @@ function resetTimerUI(){
 $('timerStart').onclick = startEpisodeTimer;
 $('timerStop').onclick = stopEpisodeTimer;
 
-/* ------------------------------------------------------------------ quick log */
-const flags = {};
-const draft = { duration:'', rhythm:'', context:'', helped:'', coughTiming:'' };
+/* ------------------------------------------------------------------ quick log (Stage 1)
+   Fast, minimal-typing basics. Symptom detail moves to Stage 2 (detail form). */
+const draft = { rhythmFeel:'', duration:'', breathingResponse:'' };
+const multi = { sensation:{}, episodeContext:{} };  // chip maps -> arrays
+function multiVals(name){ return Object.keys(multi[name]).filter(k => multi[name][k]); }
 function checkEscalation(){
-  const activeFlags = Object.keys(flags).filter(k => flags[k]);
-  const res = escalationLevel({ flags:activeFlags, rhythm:draft.rhythm, duration:draft.duration, context:draft.context });
+  const res = escalationLevel({
+    rhythmFeel: draft.rhythmFeel,
+    duration: draft.duration,
+    episodeContext: multiVals('episodeContext'),
+  });
   renderAlert($('redflagAlert'), res);
 }
-document.querySelectorAll('[data-flag]').forEach(b => b.onclick = () => {
-  const k = b.dataset.flag; flags[k] = !flags[k];
-  b.classList.toggle('on', flags[k]); b.setAttribute('aria-pressed', String(!!flags[k]));
-  checkEscalation();
+// multi-select chip groups (Stage 1: sensation, episodeContext)
+document.querySelectorAll('#logForm [data-multi]').forEach(group => {
+  const name = group.dataset.multi;
+  group.querySelectorAll('button').forEach(btn => btn.onclick = () => {
+    const v = btn.dataset.val;
+    multi[name][v] = !multi[name][v];
+    btn.classList.toggle('on', multi[name][v]);
+    if(name === 'episodeContext') checkEscalation();
+  });
 });
-/* generic single-select segmented groups */
+// single-select segmented groups (Stage 1 only: data-seg)
 document.querySelectorAll('.seg[data-seg]').forEach(group => {
   const name = group.dataset.seg;
   group.querySelectorAll('button').forEach(btn => btn.onclick = () => {
     const val = btn.dataset.val;
     draft[name] = (draft[name] === val) ? '' : val; // tap again to clear
     group.querySelectorAll('button').forEach(x => x.classList.toggle('on', x.dataset.val === draft[name]));
-    if(['rhythm','duration','context'].includes(name)) checkEscalation();
+    if(['rhythmFeel','duration'].includes(name)) checkEscalation();
   });
 });
-function clearSeg(){
-  Object.keys(draft).forEach(k => draft[k] = '');
-  document.querySelectorAll('.seg button').forEach(b => b.classList.remove('on'));
+function clearStage1(){
+  draft.rhythmFeel = draft.duration = draft.breathingResponse = '';
+  multi.sensation = {}; multi.episodeContext = {};
+  document.querySelectorAll('#logForm .seg button, #logForm .chips .btn').forEach(b => b.classList.remove('on'));
 }
 function stampLog(){
   const d = new Date();
@@ -439,56 +455,149 @@ function stampLog(){
     checkEscalation();
   }
 }
+let lastSavedTs = null;
 $('saveLog').onclick = () => {
-  const entry = {
+  const entry = normalizeEntry({
     ts: Date.now(),
-    flags: Object.keys(flags).filter(k => flags[k]),
+    sensation: multiVals('sensation'),
+    rhythmFeel: draft.rhythmFeel,
+    episodeContext: multiVals('episodeContext'),
+    breathingResponse: draft.breathingResponse,
     duration: draft.duration,
     durationSec: episode.durationSec ?? '',
     startedAt: episode.startedAt ?? null,
     endedAt: episode.endedAt ?? null,
-    rhythm: draft.rhythm,
-    context: draft.context,
     pulse: $('logPulse').value || '',
     pulseAfter: $('logPulseAfter').value || '',
     activity: $('logActivity').value.trim(),
-    helped: draft.helped,
-    coughTiming: draft.coughTiming,
-    ventolinRecent: $('logVentRecent').checked,
-    stress: $('logStress').value || '',
-    triggers: $('logTriggers').value.trim(),
     note: $('logNote').value.trim(),
-  };
+  });
   state.logs.unshift(entry); save();
-  Object.keys(flags).forEach(k => flags[k] = false);
-  document.querySelectorAll('[data-flag]').forEach(b => { b.classList.remove('on'); b.setAttribute('aria-pressed','false'); });
-  clearSeg();
-  $('logPulse').value = $('logPulseAfter').value = $('logActivity').value =
-    $('logStress').value = $('logTriggers').value = $('logNote').value = '';
-  $('logVentRecent').checked = false;
+  lastSavedTs = entry.ts;
+  clearStage1();
+  $('logPulse').value = $('logPulseAfter').value = $('logActivity').value = $('logNote').value = '';
   renderAlert($('redflagAlert'), null);
   resetTimerUI();
   pulseTaps = []; renderTapState();
   renderLogs(); show('log'); openCalmHandoff();
 };
+
+/* ------------------------------------------------------------------ detail form (Stage 2)
+   Optional richer clinical context, added to one saved episode when settled.
+   Medication/substance context is recorded, never advised on. */
+const MED_SEGS = ['relieverUsed','relieverType','relieverTime','preventer','coldflu','decongestant','adhd','antidepressantChange'];
+const MED_YES = ['caffeine','alcohol','nicotine','supplement','newMed'];
+let detailTargetTs = null;
+const dform = {};   // data-dseg single-selects
+const dassoc = {};  // associatedSymptoms multi
+const dyes = {};    // caffeine/alcohol/... yes toggles
+
+document.querySelectorAll('.seg[data-dseg]').forEach(group => {
+  const name = group.dataset.dseg;
+  group.querySelectorAll('button').forEach(btn => btn.onclick = () => {
+    dform[name] = (dform[name] === btn.dataset.val) ? '' : btn.dataset.val;
+    group.querySelectorAll('button').forEach(x => x.classList.toggle('on', x.dataset.val === dform[name]));
+  });
+});
+document.querySelectorAll('[data-dmulti]').forEach(group => {
+  group.querySelectorAll('button').forEach(btn => btn.onclick = () => {
+    const v = btn.dataset.val;
+    dassoc[v] = !dassoc[v];
+    btn.classList.toggle('on', dassoc[v]);
+    const active = Object.keys(dassoc).filter(k => dassoc[k]);
+    renderAlert($('detailEscalate'), escalationLevel({ flags: active }));
+  });
+});
+document.querySelectorAll('[data-yes]').forEach(btn => btn.onclick = () => {
+  const k = btn.dataset.yes; dyes[k] = !dyes[k]; btn.classList.toggle('on', dyes[k]);
+});
+function setDseg(name, val){
+  dform[name] = val || '';
+  const g = document.querySelector(`.seg[data-dseg="${name}"]`);
+  if(g) g.querySelectorAll('button').forEach(x => x.classList.toggle('on', x.dataset.val === dform[name]));
+}
+function clearDetailForm(){
+  Object.keys(dform).forEach(k => delete dform[k]);
+  Object.keys(dassoc).forEach(k => delete dassoc[k]);
+  Object.keys(dyes).forEach(k => delete dyes[k]);
+  document.querySelectorAll('#detailForm .seg button, #detailForm .chips .btn').forEach(b => b.classList.remove('on'));
+  $('dStressBefore').value = $('dStressDuring').value = '';
+  renderAlert($('detailEscalate'), null);
+}
+function openDetailForm(ts){
+  const e = state.logs.find(x => x.ts === ts);
+  if(!e){ toast('Episode not found'); return; }
+  detailTargetTs = ts;
+  clearDetailForm();
+  setDseg('onset', e.onset); setDseg('offset', e.offset);
+  const mc = e.medicationContext || {}, sc = e.stressContext || {};
+  MED_SEGS.forEach(k => setDseg(k, mc[k]));
+  MED_YES.forEach(k => {
+    dyes[k] = mc[k] === 'yes';
+    const b = document.querySelector(`[data-yes="${k}"]`); if(b) b.classList.toggle('on', dyes[k]);
+  });
+  $('dStressBefore').value = sc.stressBefore ?? '';
+  $('dStressDuring').value = sc.stressDuring ?? '';
+  setDseg('panicAfter', sc.panicAfter); setDseg('emotionalStress', sc.emotionalStress);
+  (e.associatedSymptoms || []).forEach(v => {
+    dassoc[v] = true;
+    const b = document.querySelector(`[data-dmulti] [data-val="${v}"]`); if(b) b.classList.add('on');
+  });
+  renderAlert($('detailEscalate'), escalationLevel({ flags: (e.associatedSymptoms || []) }));
+  $('detailFor').textContent = 'For episode on ' + new Date(ts).toLocaleString([], {weekday:'short', day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'});
+  $('detailForm').classList.remove('hidden');
+  $('detailForm').scrollIntoView({ behavior:'smooth', block:'start' });
+}
+$('detailCancel').onclick = () => { $('detailForm').classList.add('hidden'); detailTargetTs = null; };
+$('saveDetail').onclick = () => {
+  const e = state.logs.find(x => x.ts === detailTargetTs);
+  if(!e){ $('detailForm').classList.add('hidden'); return; }
+  e.onset = dform.onset || '';
+  e.offset = dform.offset || '';
+  e.associatedSymptoms = Object.keys(dassoc).filter(k => dassoc[k]);
+  const mc = {};
+  MED_SEGS.forEach(k => { if(dform[k]) mc[k] = dform[k]; });
+  MED_YES.forEach(k => { if(dyes[k]) mc[k] = 'yes'; });
+  e.medicationContext = mc;
+  const sc = {};
+  if($('dStressBefore').value !== '') sc.stressBefore = $('dStressBefore').value;
+  if($('dStressDuring').value !== '') sc.stressDuring = $('dStressDuring').value;
+  if(dform.panicAfter) sc.panicAfter = dform.panicAfter;
+  if(dform.emotionalStress) sc.emotionalStress = dform.emotionalStress;
+  e.stressContext = sc;
+  e.detailAddedAt = Date.now();
+  e.schemaVersion = SCHEMA_VERSION;
+  save();
+  $('detailForm').classList.add('hidden'); detailTargetTs = null;
+  renderLogs(); toast('Details added');
+};
 function renderLogs(){
   const logList = $('logList');
   if(!state.logs.length){ logList.innerHTML = '<p class="dim">No episodes logged yet.</p>'; return; }
-  logList.innerHTML = state.logs.map((e, idx) => {
+  logList.innerHTML = state.logs.map((e) => {
     const d = new Date(e.ts);
     const when = d.toLocaleString([], {weekday:'short', day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'});
-    const tags = (e.flags || []).map(f => `<span class="tag ${RED.includes(f) ? 'flag' : ''}">${escHtml(FLAG_LABEL[f] || f)}</span>`).join('');
+    const tags = entrySymptoms(e).map(f => `<span class="tag ${RED.includes(f) ? 'flag' : ''}">${escHtml(FLAG_LABEL[f] || f)}</span>`).join('');
     const extra = [];
+    if(e.sensation && e.sensation.length) extra.push(escHtml(e.sensation.join(', ')));
     if(e.duration) extra.push(escHtml(e.duration) + (e.durationSec ? ` (${fmt(e.durationSec)})` : ''));
-    if(e.rhythm) extra.push(escHtml(e.rhythm));
-    if(e.context) extra.push(escHtml(e.context));
+    const rhythm = e.rhythmFeel || e.rhythm; if(rhythm) extra.push(escHtml(rhythm));
+    if(e.onset || e.offset) extra.push(escHtml([e.onset, e.offset].filter(Boolean).join('→')));
+    const ctx = (e.episodeContext && e.episodeContext.length) ? e.episodeContext.join(', ') : e.context;
+    if(ctx) extra.push(escHtml(ctx));
     if(e.pulse) extra.push('Pulse ' + escHtml(e.pulse) + (e.pulseAfter ? '→' + escHtml(e.pulseAfter) : ''));
-    if(e.helped) extra.push('breathing ' + escHtml(e.helped));
-    if(e.ventolinRecent) extra.push('Ventolin <4h');
-    if(e.stress !== '' && e.stress != null) extra.push('Stress ' + escHtml(e.stress) + '/10');
+    const breath = e.breathingResponse || e.helped; if(breath) extra.push('breathing ' + escHtml(breath));
+    if(entryReliever(e)) extra.push('reliever near');
+    const sc = e.stressContext || {};
+    const stressShown = sc.stressDuring ?? sc.stressBefore ?? ((e.stress !== '' && e.stress != null) ? e.stress : null);
+    if(stressShown != null && stressShown !== '') extra.push('Stress ' + escHtml(stressShown) + '/10');
     if(e.triggers) extra.push(escHtml(e.triggers));
+    const detailBtn = e.detailAddedAt
+      ? `<button class="btn sm" data-detail="${e.ts}" style="flex:0 0 auto">Details ✓</button>`
+      : `<button class="btn sm" data-detail="${e.ts}" style="flex:0 0 auto">+ details</button>`;
     return `<div class="logitem"><div class="row" style="align-items:flex-start">
         <div class="when" style="flex:1">${when}</div>
+        ${detailBtn}
         <button class="btn sm" data-dellog="${e.ts}" style="flex:0 0 36px" aria-label="Delete this entry">✕</button>
       </div>
       <div>${tags || '<span class="dim">no symptoms ticked</span>'}</div>
@@ -496,6 +605,7 @@ function renderLogs(){
       ${e.activity ? `<div class="dim" style="font-size:.85rem;margin-top:2px">Before: ${escHtml(e.activity)}</div>` : ''}
       ${e.note ? `<div style="margin-top:4px">${escHtml(e.note)}</div>` : ''}</div>`;
   }).join('');
+  logList.querySelectorAll('[data-detail]').forEach(b => b.onclick = () => openDetailForm(Number(b.dataset.detail)));
   logList.querySelectorAll('[data-dellog]').forEach(b => b.onclick = () => {
     if(!confirm('Delete this entry?')) return;
     const ts = Number(b.dataset.dellog);
@@ -944,6 +1054,7 @@ function renderAll(){
   renderTrends(); renderCustomPatterns(); renderEmergencyForm(); renderEmergencyCard();
   syncBreatheButtons(); stampLog(); renderTapState(); applyDim();
 }
+state.logs = normalizeLogs(state.logs); save(); // migrate old entries to the current schema
 renderAll();
 maybeOnboard();
 recordOpenAndMaybeGuard();

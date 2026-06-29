@@ -5,6 +5,7 @@ import {
   bpmFromTaps, dailyCounts, average, parsePattern, phasesToString,
   topTriggers, gpStats, icsForReminders, bucketForDuration, escalationLevel,
   recentOpens, shouldShowGuardrail, CALM_COPY, hasBannedReassurance,
+  SCHEMA_VERSION, normalizeEntry, normalizeLogs, entrySymptoms, entryReliever,
 } from '../pure.js';
 
 const FLAG_LABEL = { cough:'Cough', chestpain:'Chest pain', ventolin:'Ventolin' };
@@ -218,10 +219,82 @@ test('calm copy avoids prohibited reassurance wording', () => {
   assert.equal(hasBannedReassurance('use the safety guidance'), false); // 'safety' is allowed
 });
 
+test('normalizeEntry fills missing fields and stamps schema, preserving old values', () => {
+  const old = { ts: 5, flags:['cough'], duration:'1–5 min', rhythm:'irregular', pulse:80 };
+  const n = normalizeEntry(old);
+  // old values preserved
+  assert.deepEqual(n.flags, ['cough']);
+  assert.equal(n.rhythm, 'irregular');
+  assert.equal(n.pulse, 80);
+  // new fields added with safe defaults
+  assert.deepEqual(n.sensation, []);
+  assert.deepEqual(n.associatedSymptoms, []);
+  assert.deepEqual(n.medicationContext, {});
+  assert.deepEqual(n.stressContext, {});
+  assert.equal(n.detailAddedAt, null);
+  assert.equal(n.schemaVersion, SCHEMA_VERSION);
+  // normalizeLogs maps a list and tolerates junk
+  assert.equal(normalizeLogs([old]).length, 1);
+  assert.deepEqual(normalizeLogs(null), []);
+});
+
+test('entrySymptoms unifies old flags and new associatedSymptoms', () => {
+  assert.deepEqual(entrySymptoms({ flags:['cough'], associatedSymptoms:['chestpain'] }), ['cough','chestpain']);
+  assert.deepEqual(entrySymptoms({}), []);
+});
+
+test('escalation: Stage 2 associated emergency symptoms call 000', () => {
+  // associated symptoms feed escalation via the same flags vocabulary
+  assert.equal(escalationLevel({ flags:['radiating'] }).level, '000'); // jaw/arm/etc spread
+  assert.equal(escalationLevel({ flags:['confusion'] }).level, '000');
+  assert.equal(escalationLevel({ flags:['chestpain'] }).level, '000');
+});
+
+test('escalation: medication/reliever context alone never triggers 000', () => {
+  // reliever/decongestant context is NOT in the flags vocabulary at all
+  assert.equal(escalationLevel({ flags:[] }).level, 'log');
+  assert.equal(escalationLevel({ flags:['breathless_mild'] }).level, 'log'); // mild != severe
+  assert.equal(escalationLevel({ flags:['cough','reflux','flushed'] }).level, 'log');
+  // entryReliever does not influence escalation
+  assert.equal(entryReliever({ medicationContext:{ relieverUsed:'yes' } }), true);
+  assert.equal(escalationLevel({ flags:[] }).level, 'log');
+});
+
+test('escalation: new episodeContext exercise is exertional (same-day), irregular-alone still same-day', () => {
+  assert.equal(escalationLevel({ episodeContext:['during exercise'] }).level, 'sameday');
+  assert.equal(escalationLevel({ rhythmFeel:'irregular' }).level, 'sameday'); // alone -> not 000
+  assert.equal(escalationLevel({ flags:['chestpain'], rhythmFeel:'irregular' }).level, '000');
+});
+
+test('CSV export includes medication context and onset/offset columns', () => {
+  assert.ok(CSV_HEAD.includes('reliever_used'));
+  assert.ok(CSV_HEAD.includes('medication_context'));
+  assert.ok(CSV_HEAD.includes('onset'));
+  assert.ok(CSV_HEAD.includes('offset'));
+  const csv = logsToCSV([{ ts:0, onset:'sudden', offset:'gradual',
+    associatedSymptoms:['chestpain'],
+    medicationContext:{ relieverUsed:'yes', relieverType:'Ventolin / salbutamol', relieverTime:'within 15 min', caffeine:'yes' } }], FLAG_LABEL);
+  const lines = csv.split('\n');
+  assert.ok(lines[0].includes('"reliever_type"'));
+  assert.ok(lines[1].includes('sudden'));
+  assert.ok(lines[1].includes('gradual'));
+  assert.ok(lines[1].includes('Ventolin / salbutamol'));
+  assert.ok(lines[1].includes('caffeine=yes'));
+});
+
+test('text export uses cautious "recorded near episode" wording, no causation claim', () => {
+  const txt = logsToText([{ ts:0, associatedSymptoms:['chestpain'],
+    medicationContext:{ relieverUsed:'yes', relieverType:'Ventolin / salbutamol' },
+    stressContext:{ stressBefore:4, stressDuring:7 } }], FLAG_LABEL);
+  assert.ok(txt.includes('recorded near episode'));
+  assert.ok(/not a cause/.test(txt));
+  assert.equal(hasBannedReassurance(txt), false);
+});
+
 test('logsToText handles empty and populated logs', () => {
   assert.equal(logsToText([], FLAG_LABEL), 'No episodes logged.');
   const txt = logsToText([{ ts: 0, flags:['cough'], pulse:80, stress:0, triggers:'', note:'hi' }], FLAG_LABEL);
   assert.ok(txt.includes('Symptoms: Cough'));
   assert.ok(txt.includes('Pulse before: 80'));
-  assert.ok(txt.includes('Stress: 0/10'));
+  assert.ok(txt.includes('Stress context (recorded near episode): 0/10'));
 });

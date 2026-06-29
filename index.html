@@ -135,23 +135,30 @@
     <!-- leveled escalation appears here when symptoms are ticked (000 / same-day) -->
     <div class="card alert-card hidden" id="redflagAlert" role="status"></div>
 
+    <!-- STAGE 1 — save basics now: fast, minimal typing -->
     <div class="card">
-      <h2>Quick log</h2>
+      <h2>Save basics now</h2>
       <div id="logForm">
         <p class="dim" id="logStamp" style="font-size:.85rem"></p>
 
-        <div class="ctrl-label">Symptoms</div>
-        <div class="grid2">
-          <button class="btn sm" data-flag="cough" aria-pressed="false">Cough</button>
-          <button class="btn sm" data-flag="dizzy" aria-pressed="false">Dizzy</button>
-          <button class="btn sm" data-flag="chestpain" aria-pressed="false">Chest pain</button>
-          <button class="btn sm" data-flag="breathless" aria-pressed="false">Breathless</button>
-          <button class="btn sm" data-flag="wheeze" aria-pressed="false">Wheeze</button>
-          <button class="btn sm" data-flag="tightchest" aria-pressed="false">Tight chest</button>
-          <button class="btn sm" data-flag="flushed" aria-pressed="false">Hot / flushed face</button>
-          <button class="btn sm" data-flag="fainted" aria-pressed="false">Faint / near-faint</button>
-          <button class="btn sm" data-flag="irregular" aria-pressed="false">Irregular pulse</button>
-          <button class="btn sm" data-flag="ventolin" aria-pressed="false">Ventolin taken</button>
+        <div class="ctrl-label">How did it feel? (tap any)</div>
+        <div class="chips" data-multi="sensation">
+          <button class="btn sm" data-val="skipped / thump">Skipped / thump</button>
+          <button class="btn sm" data-val="racing">Racing</button>
+          <button class="btn sm" data-val="fluttering">Fluttering</button>
+          <button class="btn sm" data-val="pounding">Pounding</button>
+          <button class="btn sm" data-val="irregular / all over">Irregular / all over</button>
+          <button class="btn sm" data-val="neck pounding">Neck pounding</button>
+          <button class="btn sm" data-val="heard in ear">Heard in ear</button>
+          <button class="btn sm" data-val="not sure">Not sure</button>
+        </div>
+
+        <div class="ctrl-label">Rhythm feel</div>
+        <div class="seg" data-seg="rhythmFeel">
+          <button data-val="regular">Regular</button>
+          <button data-val="irregular">Irregular</button>
+          <button data-val="changing">Changing</button>
+          <button data-val="not sure">Not sure</button>
         </div>
 
         <div class="ctrl-label">How long did it last?</div>
@@ -162,20 +169,14 @@
           <button data-val=">15 min">&gt;15 min</button>
         </div>
 
-        <div class="ctrl-label">Rhythm</div>
-        <div class="seg" data-seg="rhythm">
-          <button data-val="regular">Regular</button>
-          <button data-val="irregular">Irregular</button>
-          <button data-val="unsure">Not sure</button>
+        <div class="ctrl-label">Did the breathing help?</div>
+        <div class="seg" data-seg="breathingResponse">
+          <button data-val="helped">Helped</button>
+          <button data-val="partly helped">Partly</button>
+          <button data-val="did not help">Didn't help</button>
+          <button data-val="made worse">Made worse</button>
+          <button data-val="not tried">Not tried</button>
         </div>
-
-        <div class="ctrl-label">What were you doing?</div>
-        <div class="seg" data-seg="context">
-          <button data-val="at rest">At rest</button>
-          <button data-val="on exertion">On exertion</button>
-          <button data-val="lying down">Lying down</button>
-        </div>
-        <div class="field" style="margin-top:8px"><input type="text" id="logActivity" placeholder="e.g. standing up from desk, after coffee (optional)"></div>
 
         <div class="ctrl-label">Measure pulse (optional)</div>
         <button class="tapbtn" id="tapPulse"><span class="big">— bpm</span>Tap on each heartbeat</button>
@@ -185,29 +186,157 @@
           <div class="field"><label>Pulse after breathing (bpm)</label><input type="number" id="logPulseAfter" inputmode="numeric" placeholder="—"></div>
         </div>
 
-        <div class="ctrl-label">Did the breathing help?</div>
-        <div class="seg" data-seg="helped">
-          <button data-val="yes">Yes</button>
-          <button data-val="partly">Partly</button>
-          <button data-val="no">No</button>
-        </div>
+        <details class="more-fields">
+          <summary>Where / what were you doing? (optional)</summary>
+          <div class="chips" data-multi="episodeContext" style="margin-top:6px">
+            <button class="btn sm" data-val="resting">Resting</button>
+            <button class="btn sm" data-val="lying down">Lying down</button>
+            <button class="btn sm" data-val="after waking">After waking</button>
+            <button class="btn sm" data-val="standing">Standing</button>
+            <button class="btn sm" data-val="after standing">After standing</button>
+            <button class="btn sm" data-val="bending">Bending</button>
+            <button class="btn sm" data-val="after meal">After meal</button>
+            <button class="btn sm" data-val="reflux / burping">Reflux / burping</button>
+            <button class="btn sm" data-val="coughing">Coughing</button>
+            <button class="btn sm" data-val="viral illness">Viral illness</button>
+            <button class="btn sm" data-val="during exercise">During exercise</button>
+            <button class="btn sm" data-val="after exercise">After exercise</button>
+            <button class="btn sm" data-val="shower">Shower</button>
+            <button class="btn sm" data-val="driving">Driving</button>
+            <button class="btn sm" data-val="stress / conflict">Stress / conflict</button>
+            <button class="btn sm" data-val="poor sleep">Poor sleep</button>
+            <button class="btn sm" data-val="skipped meal">Skipped meal</button>
+            <button class="btn sm" data-val="dehydration signs">Dehydration signs</button>
+            <button class="btn sm" data-val="not sure">Not sure</button>
+          </div>
+          <div class="field" style="margin-top:8px"><input type="text" id="logActivity" placeholder="e.g. standing up from desk (optional)"></div>
+          <div class="field"><label>Note (optional)</label><textarea id="logNote" placeholder="How it felt, what helped…"></textarea></div>
+        </details>
 
-        <div class="ctrl-label">Cough timing (if any)</div>
-        <div class="seg" data-seg="coughTiming">
-          <button data-val="none">None</button>
-          <button data-val="before">Before</button>
-          <button data-val="during">During</button>
-          <button data-val="after">After</button>
-        </div>
-
-        <label class="chk" style="margin-top:8px"><input type="checkbox" id="logVentRecent"><span>Ventolin / reliever taken in the last 4 hours</span></label>
-
-        <div class="field" style="margin-top:6px"><label>Stress 0–10 (optional)</label><input type="number" id="logStress" inputmode="numeric" min="0" max="10" placeholder="—"></div>
-        <div class="field"><label>Triggers (caffeine, alcohol, nicotine, poor sleep, skipped meal…)</label>
-          <input type="text" id="logTriggers" placeholder="optional"></div>
-        <div class="field"><label>Note (optional)</label><textarea id="logNote" placeholder="How it felt, what helped…"></textarea></div>
-        <button class="cta" id="saveLog">Save episode</button>
+        <button class="cta" id="saveLog" style="margin-top:12px">Save basics now</button>
+        <p class="dim" style="font-size:.8rem;margin-top:6px">You can add fuller detail afterwards, once you've settled.</p>
       </div>
+    </div>
+
+    <!-- STAGE 2 — add details when settled (optional, opens for one saved episode) -->
+    <div class="card hidden" id="detailForm">
+      <div class="row" style="align-items:center">
+        <h2 style="margin:0;flex:1">Add details</h2>
+        <button class="btn sm" id="detailCancel" style="flex:0 0 auto">Cancel</button>
+      </div>
+      <p class="dim" id="detailFor" style="font-size:.85rem"></p>
+
+      <div class="ctrl-label">Onset</div>
+      <div class="seg" data-dseg="onset">
+        <button data-val="sudden">Sudden</button>
+        <button data-val="gradual">Gradual</button>
+        <button data-val="not sure">Not sure</button>
+      </div>
+      <div class="ctrl-label">Offset</div>
+      <div class="seg" data-dseg="offset">
+        <button data-val="sudden">Sudden</button>
+        <button data-val="gradual">Gradual</button>
+        <button data-val="still ongoing">Still ongoing</button>
+        <button data-val="not sure">Not sure</button>
+      </div>
+
+      <div class="ctrl-label">Associated symptoms (tap any)</div>
+      <div class="chips" data-dmulti="associatedSymptoms">
+        <button class="btn sm" data-val="breathless_mild">Mild breathlessness</button>
+        <button class="btn sm" data-val="breathless">Severe shortness of breath</button>
+        <button class="btn sm" data-val="chestpain">Chest pain / pressure / tightness</button>
+        <button class="btn sm" data-val="dizzy">Dizziness / light-headed</button>
+        <button class="btn sm" data-val="fainted">Faint / near-faint / blackout</button>
+        <button class="btn sm" data-val="sweating">Sweating / clammy</button>
+        <button class="btn sm" data-val="nausea">Nausea</button>
+        <button class="btn sm" data-val="radiating">Jaw / back / neck / arm / stomach</button>
+        <button class="btn sm" data-val="confusion">Confusion</button>
+        <button class="btn sm" data-val="wheeze">Wheeze / tight chest</button>
+        <button class="btn sm" data-val="cough">Cough</button>
+        <button class="btn sm" data-val="reflux">Reflux / indigestion / burping</button>
+        <button class="btn sm" data-val="flushed">Hot / flushed</button>
+        <button class="btn sm" data-val="chestwall">Chest wall / rib pain</button>
+        <button class="btn sm" data-val="headache">Headache</button>
+        <button class="btn sm" data-val="tingling">Tingling / numbness</button>
+        <button class="btn sm" data-val="not sure">Not sure</button>
+      </div>
+      <div id="detailEscalate" class="alert-card hidden" style="margin-top:10px" role="status"></div>
+
+      <hr class="sep">
+      <h3 style="margin:0 0 4px">Medication &amp; reliever context</h3>
+      <p class="disclaim">Some medicines and substances can be associated with palpitations. Record what
+        happened, but do not stop, start, increase, reduce, or swap any medicine, inhaler, supplement,
+        electrolyte, or salt substitute unless your GP, cardiologist, or pharmacist tells you to.</p>
+
+      <div class="ctrl-label">Asthma reliever used near this episode?</div>
+      <div class="seg" data-dseg="relieverUsed">
+        <button data-val="yes">Yes</button><button data-val="no">No</button><button data-val="not sure">Not sure</button>
+      </div>
+      <div class="ctrl-label">Reliever type</div>
+      <div class="seg" data-dseg="relieverType">
+        <button data-val="Ventolin / salbutamol">Ventolin / salbutamol</button>
+        <button data-val="Symbicort / budesonide-formoterol">Symbicort / bud-form</button>
+        <button data-val="other">Other</button>
+        <button data-val="not sure">Not sure</button>
+      </div>
+      <div class="ctrl-label">Time since reliever</div>
+      <div class="seg" data-dseg="relieverTime">
+        <button data-val="within 15 min">&lt;15 min</button>
+        <button data-val="15–60 min">15–60 min</button>
+        <button data-val="1–4 hours">1–4 h</button>
+        <button data-val="more than 4 hours">&gt;4 h</button>
+        <button data-val="not sure">Not sure</button>
+      </div>
+
+      <div class="ctrl-label">Preventer taken as usual?</div>
+      <div class="seg" data-dseg="preventer">
+        <button data-val="yes">Yes</button><button data-val="no">No</button>
+        <button data-val="not applicable">N/A</button><button data-val="not sure">Not sure</button>
+      </div>
+      <div class="ctrl-label">Cold/flu medication?</div>
+      <div class="seg" data-dseg="coldflu">
+        <button data-val="yes">Yes</button><button data-val="no">No</button><button data-val="not sure">Not sure</button>
+      </div>
+      <div class="ctrl-label">Decongestant?</div>
+      <div class="seg" data-dseg="decongestant">
+        <button data-val="yes">Yes</button><button data-val="no">No</button><button data-val="not sure">Not sure</button>
+      </div>
+      <div class="ctrl-label">ADHD medication?</div>
+      <div class="seg" data-dseg="adhd">
+        <button data-val="yes">Yes</button><button data-val="no">No</button>
+        <button data-val="not taking">Not taking</button><button data-val="not sure">Not sure</button>
+      </div>
+      <div class="ctrl-label">Antidepressant change recently?</div>
+      <div class="seg" data-dseg="antidepressantChange">
+        <button data-val="yes">Yes</button><button data-val="no">No</button><button data-val="not sure">Not sure</button>
+      </div>
+      <div class="ctrl-label">In the hours before (tap any)</div>
+      <div class="chips" data-dyes="caffeine,alcohol,nicotine,supplement,newMed">
+        <button class="btn sm" data-yes="caffeine">Caffeine</button>
+        <button class="btn sm" data-yes="alcohol">Alcohol</button>
+        <button class="btn sm" data-yes="nicotine">Nicotine / vape</button>
+        <button class="btn sm" data-yes="supplement">Supplement / electrolyte / salt</button>
+        <button class="btn sm" data-yes="newMed">New medicine / substance</button>
+      </div>
+
+      <hr class="sep">
+      <h3 style="margin:0 0 4px">Stress context</h3>
+      <p class="dim" style="font-size:.85rem">Stress can be a trigger, a response, or just background context.
+        Logging it does not mean the episode was "just anxiety".</p>
+      <div class="grid2" style="margin-top:6px">
+        <div class="field"><label>Stress before (0–10)</label><input type="number" id="dStressBefore" inputmode="numeric" min="0" max="10" placeholder="—"></div>
+        <div class="field"><label>Stress during (0–10)</label><input type="number" id="dStressDuring" inputmode="numeric" min="0" max="10" placeholder="—"></div>
+      </div>
+      <div class="ctrl-label">Panic/fear started after the palpitation?</div>
+      <div class="seg" data-dseg="panicAfter">
+        <button data-val="yes">Yes</button><button data-val="no">No</button><button data-val="not sure">Not sure</button>
+      </div>
+      <div class="ctrl-label">Emotional stress/conflict nearby?</div>
+      <div class="seg" data-dseg="emotionalStress">
+        <button data-val="yes">Yes</button><button data-val="no">No</button><button data-val="not sure">Not sure</button>
+      </div>
+
+      <button class="cta" id="saveDetail" style="margin-top:14px">Save details</button>
     </div>
 
     <div class="card">
@@ -404,7 +533,7 @@
       <h2 id="calmSavedMsg"></h2>
       <div class="stack">
         <button class="cta" id="calmDone">Done — put phone down</button>
-        <button class="cta secondary" id="calmDetails">Add details later</button>
+        <button class="cta secondary" id="calmDetails">Add details</button>
         <button class="cta secondary" id="calmBreathe">Start 1 min breathing</button>
       </div>
       <details class="prayer" id="prayerCard">

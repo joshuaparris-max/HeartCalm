@@ -1,7 +1,7 @@
 /* Calm — service worker
    Cache-first for the app shell so it works fully offline once loaded.
    Bump CACHE when you change any file to force an update. */
-const CACHE = 'calm-v5';
+const CACHE = 'calm-v6';
 const ASSETS = [
   './',
   './index.html',

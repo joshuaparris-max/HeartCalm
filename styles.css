@@ -170,6 +170,15 @@ hr.sep{border:none; border-top:1px solid var(--line); margin:14px 0}
   background:var(--card2); color:var(--ink); border:1.5px solid var(--accent)}
 .tapbtn .big{display:block; font-size:2rem; font-variant-numeric:tabular-nums}
 
+/* multi-select chip groups (sensation, context, associated symptoms) */
+.chips{display:flex; flex-wrap:wrap; gap:6px}
+.chips .btn{flex:0 1 auto; padding:9px 12px; font-size:.85rem; width:auto}
+.chips .btn.on{background:var(--accent); color:var(--accent-ink); border-color:var(--accent)}
+/* collapsible "add context / details" disclosure */
+details.more-fields{margin-top:12px}
+details.more-fields > summary{cursor:pointer; font-size:.82rem; color:var(--ink-dim);
+  font-weight:600; letter-spacing:.2px; padding:6px 0}
+
 /* segmented single-select controls */
 .seg{display:flex; gap:6px; flex-wrap:wrap}
 .seg button{flex:1; min-width:64px; background:var(--card2); color:var(--ink);
