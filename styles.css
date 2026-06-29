@@ -9,6 +9,7 @@
   --accent:#5e9c8f;        /* muted teal — calm */
   --accent-ink:#0e1418;
   --warn-bg:#2a1d1d; --warn-ink:#e7b4b0; --warn-line:#5a3a38;
+  --caution-bg:#2a2519; --caution-ink:#dcc79a; --caution-line:#564b30; /* same-day, softer than warn */
   --danger:#c4756e;        /* muted, never bright/flashing */
   --ok:#5e9c8f;
   --radius:16px; --maxw:680px;
@@ -19,6 +20,7 @@ html[data-theme="light"]{
   --ink:#2c3640; --ink-dim:#647284; --line:#d8dee4;
   --accent:#3f7c6f; --accent-ink:#ffffff;
   --warn-bg:#fbeceb; --warn-ink:#8a3b34; --warn-line:#e8cbc8;
+  --caution-bg:#fbf4e6; --caution-ink:#7a5a1e; --caution-line:#e8dcc0;
   --danger:#b4544c; --ok:#3f7c6f;
   --shadow:0 6px 24px rgba(40,60,80,.12);
 }
@@ -200,3 +202,18 @@ body.private #prepSummary:focus-within{ filter:none }
 .emerg{border:1px solid var(--warn-line); background:var(--warn-bg); color:var(--warn-ink);
   border-radius:12px; padding:12px 14px; font-size:.9rem}
 .emerg b{color:var(--warn-ink)}
+/* same-day (level 2) escalation — softer amber, distinct from the 000 red */
+.caution{border:1px solid var(--caution-line); background:var(--caution-bg); color:var(--caution-ink);
+  border-radius:12px; padding:12px 14px; font-size:.9rem}
+.caution strong, .caution b{color:var(--caution-ink)}
+.alert-card{border:1px solid var(--line); border-radius:12px; padding:12px 14px}
+.alert-card.is-000{border-color:var(--warn-line); background:var(--warn-bg)}
+.alert-card.is-sameday{border-color:var(--caution-line); background:var(--caution-bg)}
+.alert-card p{margin:0}
+.alert-card.is-000 p{color:var(--warn-ink)}
+.alert-card.is-sameday p{color:var(--caution-ink)}
+
+/* live episode timer */
+.timer-display{font-variant-numeric:tabular-nums; font-size:2.6rem; font-weight:600;
+  text-align:center; color:var(--accent); margin:6px 0 12px; letter-spacing:1px}
+.timer-display.running{color:var(--warn-ink)}

@@ -158,6 +158,43 @@ Test suite expanded to **14 passing tests** (added CSV schema, `topTriggers`, `g
 
 ---
 
+## Round 3 — PDF-grounded clinical safety (2026-06-29)
+
+First slice of the palpitation-PDF backlog (RACGP AJGP, Healthdirect, the HeartCalm
+improvement report, and patient leaflets). Focus: in-the-moment reliability and safer
+escalation. **Release 1 of 5 — shipped.**
+
+1. **Three-level escalation** replaces the old binary red-flag prompt. Symptoms now map to
+   **Call 000 / Get checked today (same-day) / Log & discuss**. Decision logic is the pure,
+   tested `escalationLevel()`; both the palpitation safety-check and the log form render the
+   matching leveled banner (red for 000, softer amber for same-day).
+   - Key clinical correction from the PDFs: **irregular pulse *alone* is same-day, not 000** —
+     but irregular **+** chest pain (or dizzy + irregular) is urgent. Sustained (>15 min),
+     exertional, and wheeze episodes are same-day. Same-day path shows the Healthdirect line
+     (1800 022 222).
+2. **Live episode timer** on the palpitation screen. "Start timing → It's settled now" captures
+   **exact onset→settle duration** (`durationSec`/`startedAt`/`endedAt`), the single field a
+   cardiologist weights most. It pre-fills the matching duration bucket when you log, and the
+   exact time flows into the log list, the text export, and a new `duration_sec` CSV column.
+
+Test suite expanded to **20 passing tests** (added `bucketForDuration`, four `escalationLevel`
+cases, and the `duration_sec` CSV column).
+
+### Remaining backlog (Releases 2–5, not yet built)
+- **R2 — Two-stage episode diary:** "save basics now" vs "add detail when settled"; onset/offset
+  (sudden/gradual), sensation chips (skipped/racing/fluttering/pounding), reflux/meal/sleep
+  context, and **medication/reliever/substance context** (record-only, never advice).
+- **R3 — Cardiology appointment mode:** appointment date/countdown, questions-to-ask, prior-testing
+  summary, HeartBug/Holter dates + recording-gap notes, a one-page cardiology summary + appendix.
+- **R4 — Anti-spiral + calm:** "you've captured enough — phone down", repeated-checking nudge,
+  trends behind a weekly-review gate, optional faith comfort card, expanded breathing menu,
+  panic-state simplified UI.
+- **R5 — Hardening:** schema versioning, backup import validation, export/privacy warnings, a
+  test guarding against prohibited reassurance wording ("benign"/"safe"/"just anxiety").
+- **Explicitly out of scope** (from the PDF review): ECG/rhythm interpretation, "benign/safe"
+  labels, supplement/electrolyte advice, beta-blocker/asthma med suggestions, wearable/Health-Connect
+  import, cloud sync, AI medical chat, risk scores, and a default correlation dashboard.
+
 ### Deploy notes
 - Static site; `vercel.json` sets `no-cache` on `sw.js` and `manifest.json`.
 - After each change, bump `CACHE` in `sw.js` (already automated in spirit — remember to bump).

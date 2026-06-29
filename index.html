@@ -78,6 +78,16 @@
       shortness of breath, fainting or near-fainting, severe dizziness, or palpitations that won't settle and feel wrong.</p>
     </div>
 
+    <!-- Episode timer — capture exact duration, the single most useful field for a cardiologist -->
+    <div class="card" id="episodeTimerCard">
+      <h2>Time this episode</h2>
+      <p class="dim" style="font-size:.85rem">Start when you notice it, stop when it settles. An exact length helps your doctor far more than a guess.</p>
+      <div class="timer-display hidden" id="timerDisplay">0:00</div>
+      <button class="cta" id="timerStart">▶  Start timing</button>
+      <button class="cta secondary hidden" id="timerStop">■  It's settled now</button>
+      <p class="dim hidden" id="timerDone" style="font-size:.9rem;margin-top:8px"></p>
+    </div>
+
     <!-- Step 1 -->
     <div class="card">
       <h2><span class="pill">Step 1</span> Steady yourself</h2>
@@ -94,9 +104,7 @@
       <h2><span class="pill">Step 2</span> Quick safety check</h2>
       <p class="dim" style="font-size:.85rem">Tick anything you have right now.</p>
       <div id="palpRedflags"></div>
-      <div id="palpEscalate" class="hidden" style="margin-top:10px">
-        <div class="emerg"><strong>Stop — this may need urgent assessment.</strong> Call <strong>000</strong> now if symptoms are present, severe, worsening, or not settling.</div>
-      </div>
+      <div id="palpEscalate" class="alert-card hidden" style="margin-top:10px" role="status"></div>
     </div>
 
     <!-- Step 3 -->
@@ -120,11 +128,8 @@
 
   <!-- ===================== LOG VIEW ===================== -->
   <section class="view" id="view-log" aria-label="Log">
-    <!-- red-flag escalation appears here when a dangerous symptom is ticked -->
-    <div class="card hidden" id="redflagAlert" style="border-color:var(--warn-line); background:var(--warn-bg)">
-      <p style="color:var(--warn-ink);margin:0"><strong>Stop — this may need urgent assessment.</strong>
-      Call <strong>000</strong> now if symptoms are present, severe, worsening, or not settling.</p>
-    </div>
+    <!-- leveled escalation appears here when symptoms are ticked (000 / same-day) -->
+    <div class="card alert-card hidden" id="redflagAlert" role="status"></div>
 
     <div class="card">
       <h2>Quick log</h2>

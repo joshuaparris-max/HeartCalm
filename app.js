@@ -5,6 +5,7 @@
 import {
   fmt, pad2, escHtml, logsToText, logsToCSV, aggregatePrep, gpStats,
   bpmFromTaps, dailyCounts, average, parsePattern, phasesToString, icsForReminders,
+  bucketForDuration, escalationLevel,
 } from './pure.js';
 
 const $ = id => document.getElementById(id);
@@ -50,8 +51,21 @@ const FLAG_LABEL = { cough:'Cough', dizzy:'Dizzy', chestpain:'Chest pain', breat
   wheeze:'Wheeze', tightchest:'Tight chest', flushed:'Hot/flushed face', fainted:'Faint/near-faint',
   irregular:'Irregular pulse', ventolin:'Ventolin' };
 const RED = ['chestpain','breathless','fainted'];
-/* Symptoms that should trigger the urgent-assessment prompt. */
-const ESCALATE = ['chestpain','breathless','fainted','dizzy','irregular'];
+
+/* Three-level escalation messaging. The decision logic lives in pure.js
+   (escalationLevel); this just renders the matching banner into a target.
+   Healthdirect's helpline number is used for the same-day path. */
+const ESC_MSG = {
+  '000': '<strong>This may need urgent assessment.</strong> Call <strong>000</strong> now — especially if symptoms are severe, spreading, worsening, or not settling.',
+  'sameday': '<strong>Worth getting checked today.</strong> Call your GP or Healthdirect on <strong>1800&nbsp;022&nbsp;222</strong> — particularly if this keeps happening, lasts a while, or comes on with exertion.',
+};
+function renderAlert(el, result){
+  el.classList.remove('is-000', 'is-sameday');
+  if(!result || result.level === 'log'){ el.classList.add('hidden'); el.innerHTML = ''; return; }
+  el.classList.remove('hidden');
+  el.classList.add(result.level === '000' ? 'is-000' : 'is-sameday');
+  el.innerHTML = '<p>' + ESC_MSG[result.level] + '</p>';
+}
 
 const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -253,7 +267,7 @@ $('ovStop').onclick = () => stopBreathing(false);
 
 /* ------------------------------------------------------------------ palpitation */
 $('palpBtn').onclick = () => show('palp');
-$('palpLog').onclick = () => show('log');
+$('palpLog').onclick = () => { stopEpisodeTimer(); show('log'); };
 
 const PALP_REDFLAGS = [
   ['chestpain','Chest pain or pressure'],
@@ -265,20 +279,68 @@ const PALP_REDFLAGS = [
 function renderPalpChecks(){
   $('palpRedflags').innerHTML = PALP_REDFLAGS.map(([k, t]) =>
     `<label class="chk"><input type="checkbox" data-palpflag="${k}"><span>${t}</span></label>`).join('');
-  $('palpRedflags').querySelectorAll('input').forEach(i => i.onchange = () => {
-    const any = [...$('palpRedflags').querySelectorAll('input')].some(x => x.checked);
-    $('palpEscalate').classList.toggle('hidden', !any);
-    if(any) vibe(30);
+  const inputs = [...$('palpRedflags').querySelectorAll('input')];
+  inputs.forEach(i => i.onchange = () => {
+    const checked = inputs.filter(x => x.checked).map(x => x.dataset.palpflag);
+    const res = escalationLevel({ flags: checked });
+    renderAlert($('palpEscalate'), res);
+    if(res.level !== 'log') vibe(30);
   });
-  $('palpEscalate').classList.add('hidden');
+  renderAlert($('palpEscalate'), null);
 }
+
+/* ------------------------------------------------------------------ episode timer
+   Capturing exact onset→settle duration is the single most useful field for a
+   cardiologist; the manual buckets are a fallback. The timer pre-fills the
+   matching bucket when the episode is logged. */
+let episode = { startedAt:null, endedAt:null, durationSec:null };
+let episodeTick = null;
+function updateTimerDisplay(){
+  if(episode.startedAt == null) return;
+  $('timerDisplay').textContent = fmt(Math.floor((Date.now() - episode.startedAt) / 1000));
+}
+function startEpisodeTimer(){
+  episode = { startedAt:Date.now(), endedAt:null, durationSec:null };
+  $('timerDisplay').classList.remove('hidden'); $('timerDisplay').classList.add('running');
+  $('timerDone').classList.add('hidden');
+  $('timerStart').classList.add('hidden');
+  $('timerStop').classList.remove('hidden');
+  updateTimerDisplay();
+  episodeTick = setInterval(updateTimerDisplay, 1000);
+  vibe(30);
+}
+function stopEpisodeTimer(){
+  if(episode.startedAt == null || episode.endedAt != null) return;
+  clearInterval(episodeTick); episodeTick = null;
+  episode.endedAt = Date.now();
+  episode.durationSec = Math.max(1, Math.round((episode.endedAt - episode.startedAt) / 1000));
+  $('timerDisplay').classList.remove('running');
+  $('timerDisplay').textContent = fmt(episode.durationSec);
+  $('timerStop').classList.add('hidden');
+  $('timerStart').classList.remove('hidden'); $('timerStart').textContent = '▶  Time another';
+  $('timerDone').classList.remove('hidden');
+  $('timerDone').textContent = `Lasted ${fmt(episode.durationSec)} — this fills in the duration when you log it.`;
+  vibe(40);
+}
+function resetTimerUI(){
+  if(episodeTick){ clearInterval(episodeTick); episodeTick = null; }
+  episode = { startedAt:null, endedAt:null, durationSec:null };
+  $('timerDisplay').classList.add('hidden'); $('timerDisplay').classList.remove('running');
+  $('timerDisplay').textContent = '0:00';
+  $('timerStart').classList.remove('hidden'); $('timerStart').textContent = '▶  Start timing';
+  $('timerStop').classList.add('hidden');
+  $('timerDone').classList.add('hidden');
+}
+$('timerStart').onclick = startEpisodeTimer;
+$('timerStop').onclick = stopEpisodeTimer;
 
 /* ------------------------------------------------------------------ quick log */
 const flags = {};
 const draft = { duration:'', rhythm:'', context:'', helped:'', coughTiming:'' };
 function checkEscalation(){
-  const hot = Object.keys(flags).some(k => flags[k] && ESCALATE.includes(k)) || draft.rhythm === 'irregular';
-  $('redflagAlert').classList.toggle('hidden', !hot);
+  const activeFlags = Object.keys(flags).filter(k => flags[k]);
+  const res = escalationLevel({ flags:activeFlags, rhythm:draft.rhythm, duration:draft.duration, context:draft.context });
+  renderAlert($('redflagAlert'), res);
 }
 document.querySelectorAll('[data-flag]').forEach(b => b.onclick = () => {
   const k = b.dataset.flag; flags[k] = !flags[k];
@@ -292,7 +354,7 @@ document.querySelectorAll('.seg[data-seg]').forEach(group => {
     const val = btn.dataset.val;
     draft[name] = (draft[name] === val) ? '' : val; // tap again to clear
     group.querySelectorAll('button').forEach(x => x.classList.toggle('on', x.dataset.val === draft[name]));
-    if(name === 'rhythm') checkEscalation();
+    if(['rhythm','duration','context'].includes(name)) checkEscalation();
   });
 });
 function clearSeg(){
@@ -302,12 +364,22 @@ function clearSeg(){
 function stampLog(){
   const d = new Date();
   $('logStamp').textContent = 'Started: ' + d.toLocaleString([], {weekday:'short', hour:'2-digit', minute:'2-digit', day:'numeric', month:'short'});
+  // pre-fill the duration bucket from a just-timed episode (unless already set)
+  if(episode.durationSec != null && !draft.duration){
+    draft.duration = bucketForDuration(episode.durationSec);
+    const seg = document.querySelector('.seg[data-seg="duration"]');
+    if(seg) seg.querySelectorAll('button').forEach(x => x.classList.toggle('on', x.dataset.val === draft.duration));
+    checkEscalation();
+  }
 }
 $('saveLog').onclick = () => {
   const entry = {
     ts: Date.now(),
     flags: Object.keys(flags).filter(k => flags[k]),
     duration: draft.duration,
+    durationSec: episode.durationSec ?? '',
+    startedAt: episode.startedAt ?? null,
+    endedAt: episode.endedAt ?? null,
     rhythm: draft.rhythm,
     context: draft.context,
     pulse: $('logPulse').value || '',
@@ -327,7 +399,8 @@ $('saveLog').onclick = () => {
   $('logPulse').value = $('logPulseAfter').value = $('logActivity').value =
     $('logStress').value = $('logTriggers').value = $('logNote').value = '';
   $('logVentRecent').checked = false;
-  $('redflagAlert').classList.add('hidden');
+  renderAlert($('redflagAlert'), null);
+  resetTimerUI();
   pulseTaps = []; renderTapState();
   renderLogs(); toast('Episode saved'); show('log');
 };
@@ -339,7 +412,7 @@ function renderLogs(){
     const when = d.toLocaleString([], {weekday:'short', day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'});
     const tags = (e.flags || []).map(f => `<span class="tag ${RED.includes(f) ? 'flag' : ''}">${escHtml(FLAG_LABEL[f] || f)}</span>`).join('');
     const extra = [];
-    if(e.duration) extra.push(escHtml(e.duration));
+    if(e.duration) extra.push(escHtml(e.duration) + (e.durationSec ? ` (${fmt(e.durationSec)})` : ''));
     if(e.rhythm) extra.push(escHtml(e.rhythm));
     if(e.context) extra.push(escHtml(e.context));
     if(e.pulse) extra.push('Pulse ' + escHtml(e.pulse) + (e.pulseAfter ? '→' + escHtml(e.pulseAfter) : ''));

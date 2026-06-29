@@ -27,7 +27,7 @@ export function logsToText(logs, FLAG_LABEL){
     const d = new Date(e.ts).toLocaleString();
     let s = '• ' + d;
     if(e.flags && e.flags.length) s += '\n  Symptoms: ' + e.flags.map(f => FLAG_LABEL[f] || f).join(', ');
-    if(e.duration) s += '\n  Duration: ' + e.duration;
+    if(e.duration) s += '\n  Duration: ' + e.duration + (e.durationSec ? ` (timed: ${fmt(e.durationSec)})` : '');
     if(e.rhythm) s += '\n  Rhythm: ' + e.rhythm;
     if(e.context) s += '\n  When: ' + e.context;
     if(e.pulse) s += '\n  Pulse before: ' + e.pulse;
@@ -43,7 +43,7 @@ export function logsToText(logs, FLAG_LABEL){
   }).join('\n');
 }
 
-export const CSV_HEAD = ['timestamp','symptoms','duration','rhythm','context',
+export const CSV_HEAD = ['timestamp','symptoms','duration','duration_sec','rhythm','context',
   'pulse_before','pulse_after','activity','breathing_helped','cough_timing',
   'ventolin_recent','stress','triggers','note'];
 
@@ -51,7 +51,7 @@ export function logsToCSV(logs, FLAG_LABEL){
   const rows = logs.map(e => [
     new Date(e.ts).toISOString(),
     (e.flags || []).map(f => FLAG_LABEL[f] || f).join('; '),
-    e.duration ?? '', e.rhythm ?? '', e.context ?? '',
+    e.duration ?? '', e.durationSec ?? '', e.rhythm ?? '', e.context ?? '',
     e.pulse ?? '', e.pulseAfter ?? '', e.activity ?? '',
     e.helped ?? '', e.coughTiming ?? '', e.ventolinRecent ? 'yes' : '',
     e.stress ?? '', e.triggers ?? '',
@@ -172,4 +172,48 @@ export function parsePattern(str){
 
 export function phasesToString(phases){
   return phases.map(([t, n]) => t + ':' + n).join(', ');
+}
+
+/* Map an exactly-timed episode (seconds) to the log's duration bucket so a
+   live timer can pre-fill the same field the manual buttons set. Boundaries
+   match the seg buttons: <1 min / 1–5 min / 5–15 min / >15 min. */
+export function bucketForDuration(sec){
+  const s = Number(sec);
+  if(!(s >= 0)) return '';
+  if(s < 60) return '<1 min';
+  if(s < 300) return '1–5 min';
+  if(s < 900) return '5–15 min';
+  return '>15 min';
+}
+
+/* Symptoms that, on their own, warrant calling 000. Deliberately does NOT
+   include 'irregular' or 'dizzy' alone — per RACGP/Healthdirect, irregular
+   pulse alone is a same-day review, but irregular + chest pain is urgent. */
+export const EMERGENCY_SIGNALS = ['chestpain', 'tightchest', 'breathless', 'fainted'];
+
+/* Three-level escalation (call 000 / same-day review / log & discuss).
+   Inputs come from either the palp safety check (flags only) or the log form
+   (flags + rhythm/duration/context segments). Returns { level, reasons }.
+   level is one of '000' | 'sameday' | 'log'. */
+export function escalationLevel({ flags = [], rhythm = '', duration = '', context = '' } = {}){
+  const has = k => flags.includes(k);
+  const irregular = has('irregular') || rhythm === 'irregular';
+
+  // Level 1 — call 000 now
+  const emergency = EMERGENCY_SIGNALS.filter(has);
+  if(has('dizzy') && irregular) emergency.push('dizzy+irregular');
+  if(has('dizzy') && has('wontsettle')) emergency.push('dizzy+wontsettle');
+  if(emergency.length) return { level: '000', reasons: emergency };
+
+  // Level 2 — get checked today
+  const sameday = [];
+  if(irregular) sameday.push('irregular');
+  if(has('dizzy')) sameday.push('dizzy');
+  if(has('wheeze')) sameday.push('wheeze');
+  if(has('wontsettle')) sameday.push('wontsettle');
+  if(duration === '>15 min') sameday.push('sustained');
+  if(context === 'on exertion') sameday.push('exertional');
+  if(sameday.length) return { level: 'sameday', reasons: sameday };
+
+  return { level: 'log', reasons: [] };
 }

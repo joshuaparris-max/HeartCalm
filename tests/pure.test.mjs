@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   fmt, pad2, escHtml, logsToText, logsToCSV, CSV_HEAD, aggregatePrep,
   bpmFromTaps, dailyCounts, average, parsePattern, phasesToString,
-  topTriggers, gpStats, icsForReminders,
+  topTriggers, gpStats, icsForReminders, bucketForDuration, escalationLevel,
 } from '../pure.js';
 
 const FLAG_LABEL = { cough:'Cough', chestpain:'Chest pain', ventolin:'Ventolin' };
@@ -134,6 +134,55 @@ test('icsForReminders emits a daily VEVENT per active reminder', () => {
   assert.ok(ics.includes('RRULE:FREQ=DAILY'));
   assert.ok(ics.includes('SUMMARY:Water + food'));
   assert.ok(!ics.includes('Off one')); // disabled reminder excluded
+});
+
+test('bucketForDuration maps seconds to the seg buckets', () => {
+  assert.equal(bucketForDuration(0), '<1 min');
+  assert.equal(bucketForDuration(59), '<1 min');
+  assert.equal(bucketForDuration(60), '1–5 min');
+  assert.equal(bucketForDuration(299), '1–5 min');
+  assert.equal(bucketForDuration(300), '5–15 min');
+  assert.equal(bucketForDuration(899), '5–15 min');
+  assert.equal(bucketForDuration(900), '>15 min');
+  assert.equal(bucketForDuration(5000), '>15 min');
+  assert.equal(bucketForDuration(-1), '');
+});
+
+test('escalationLevel: emergency symptoms call 000', () => {
+  assert.equal(escalationLevel({ flags:['chestpain'] }).level, '000');
+  assert.equal(escalationLevel({ flags:['breathless'] }).level, '000');
+  assert.equal(escalationLevel({ flags:['fainted'] }).level, '000');
+  assert.equal(escalationLevel({ flags:['tightchest'] }).level, '000');
+});
+
+test('escalationLevel: irregular pulse ALONE is same-day, not 000', () => {
+  // this is the key RACGP/Healthdirect correction
+  assert.equal(escalationLevel({ flags:['irregular'] }).level, 'sameday');
+  assert.equal(escalationLevel({ rhythm:'irregular' }).level, 'sameday');
+  // but irregular + chest pain is urgent
+  assert.equal(escalationLevel({ flags:['irregular','chestpain'] }).level, '000');
+  // and dizzy + irregular together is urgent
+  assert.equal(escalationLevel({ flags:['dizzy','irregular'] }).level, '000');
+});
+
+test('escalationLevel: sustained / exertional / wheeze are same-day', () => {
+  assert.equal(escalationLevel({ duration:'>15 min' }).level, 'sameday');
+  assert.equal(escalationLevel({ context:'on exertion' }).level, 'sameday');
+  assert.equal(escalationLevel({ flags:['wheeze'] }).level, 'sameday');
+  assert.equal(escalationLevel({ flags:['dizzy'] }).level, 'sameday');
+});
+
+test('escalationLevel: benign brief episode is log-only', () => {
+  assert.equal(escalationLevel({ flags:['flushed'], rhythm:'regular', duration:'1–5 min', context:'at rest' }).level, 'log');
+  assert.equal(escalationLevel({}).level, 'log');
+});
+
+test('logsToCSV includes exact duration_sec column', () => {
+  assert.ok(CSV_HEAD.includes('duration_sec'));
+  const csv = logsToCSV([{ ts:0, duration:'1–5 min', durationSec:142 }], FLAG_LABEL);
+  const lines = csv.split('\n');
+  assert.ok(lines[0].includes('"duration_sec"'));
+  assert.ok(lines[1].includes('"142"'));
 });
 
 test('logsToText handles empty and populated logs', () => {
