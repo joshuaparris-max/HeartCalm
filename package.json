@@ -5,7 +5,13 @@
   "description": "Calm — a breathing & palpitation support PWA. Not a medical device.",
   "type": "module",
   "scripts": {
-    "test": "node --test"
+    "dev": "http-server . -p 8080 -c-1",
+    "test": "node --test",
+    "test:e2e": "playwright test"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "@playwright/test": "^1.62.1",
+    "http-server": "^14.1.1"
+  }
 }
