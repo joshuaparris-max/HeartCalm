@@ -103,6 +103,56 @@ export function gpStats(logs, care, RED, nowMs){
   });
 }
 
+export function timeOfDayBucket(ts){
+  const h = new Date(ts).getHours();
+  if(h >= 5 && h < 12) return 'morning';
+  if(h >= 12 && h < 17) return 'afternoon';
+  if(h >= 17 && h < 22) return 'evening';
+  return 'night';
+}
+
+/* Cautious, non-diagnostic correlations over the log. Wording in the UI uses
+   "associated with" / "logged near", never "caused by". */
+export function correlations(logs){
+  const byTimeOfDay = { morning:0, afternoon:0, evening:0, night:0 };
+  const triggerCounts = { poorSleep:0, caffeine:0, skippedMeal:0, alcohol:0, nicotine:0, highStress:0 };
+  let ventolinRecent = 0, dropSum = 0, dropN = 0;
+  logs.forEach(e => {
+    byTimeOfDay[timeOfDayBucket(e.ts)]++;
+    if(e.pulse && e.pulseAfter){ dropSum += Number(e.pulse) - Number(e.pulseAfter); dropN++; }
+    if(e.ventolinRecent) ventolinRecent++;
+    const t = String(e.triggers || '').toLowerCase();
+    if(/poor sleep|no sleep|insomnia|tired|exhaust/.test(t)) triggerCounts.poorSleep++;
+    if(/caffeine|coffee|energy drink|espresso|tea/.test(t)) triggerCounts.caffeine++;
+    if(/skip|empty stomach|missed meal|hungry|no food/.test(t)) triggerCounts.skippedMeal++;
+    if(/alcohol|wine|beer|spirits|drink/.test(t)) triggerCounts.alcohol++;
+    if(/nicotine|vape|cigarette|smok/.test(t)) triggerCounts.nicotine++;
+    if(e.stress !== '' && e.stress != null && Number(e.stress) >= 7) triggerCounts.highStress++;
+  });
+  return { total: logs.length, byTimeOfDay, triggerCounts, ventolinRecent,
+    avgPulseDrop: dropN ? dropSum / dropN : null };
+}
+
+export function recentAveragePulse(logs, n){
+  const xs = logs.map(e => e.pulse).filter(p => p !== '' && p != null && Number(p) > 0).slice(0, n).map(Number);
+  if(!xs.length) return null;
+  return xs.reduce((a, b) => a + b, 0) / xs.length;
+}
+
+/* Non-diagnostic pulse threshold check. Returns a level + message, never a
+   clinical label like "tachycardia". t = {high, low, delta, show}. */
+export function pulseWarning(value, recentAvg, t){
+  const v = Number(value);
+  if(!t || !t.show || !(v > 0)) return { level:'', msg:'' };
+  if(v >= t.high) return { level:'high',
+    msg:`${v} bpm is above your set threshold (${t.high}). This is not a diagnosis. If it comes with chest pain, breathlessness, fainting/near-fainting, severe dizziness, or won't settle, seek urgent care.` };
+  if(v <= t.low) return { level:'low',
+    msg:`${v} bpm is below your set threshold (${t.low}). This is not a diagnosis. If you feel faint, very unwell, or it won't settle, seek urgent care.` };
+  if(recentAvg != null && Math.abs(v - recentAvg) >= t.delta) return { level:'delta',
+    msg:`${v} bpm is a large change from your recent logged average (~${Math.round(recentAvg)}). It may be worth noting what was happening and mentioning to your GP.` };
+  return { level:'', msg:'' };
+}
+
 /* Build a daily-repeating iCalendar so reminders can live in the user's real
    calendar (which fires reliably even when the app is closed). dtstartDate is
    a 'YYYYMMDD' base day, passed in to keep this deterministic/testable. */
