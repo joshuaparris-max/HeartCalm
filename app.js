@@ -149,6 +149,7 @@ const LS = {
 const DEFAULT_SETTINGS = { theme:'dark', chime:false, vibe:false, voice:false, dim:false,
   dur:300, pattern:'46', onboarded:false, patterns:[] };
 const DEFAULT_EMERGENCY = { conditions:'', meds:'', allergies:'', contactName:'', contactPhone:'', notes:'' };
+const DEFAULT_CARDIO = { apptDate:'', holterDate:'', tests:'', gaps:'', questions:'' };
 
 const state = {
   logs: LS.get('logs', []),
@@ -156,11 +157,12 @@ const state = {
   settings: Object.assign({}, DEFAULT_SETTINGS, LS.get('settings', {})),
   care: LS.get('care', []),
   emergency: Object.assign({}, DEFAULT_EMERGENCY, LS.get('emergency', {})),
+  cardio: Object.assign({}, DEFAULT_CARDIO, LS.get('cardio', {})),
 };
 function save(){
   LS.set('logs', state.logs); LS.set('reminders', state.reminders);
   LS.set('settings', state.settings); LS.set('care', state.care);
-  LS.set('emergency', state.emergency);
+  LS.set('emergency', state.emergency); LS.set('cardio', state.cardio);
 }
 
 /* All known patterns (builtin + custom), keyed by id. */
@@ -847,6 +849,59 @@ $('printPrep').onclick = () => {
   window.print();
 };
 
+/* Cardiology Appointment Mode */
+function renderCardioForm(){
+  const c = state.cardio;
+  $('cardioApptDate').value = c.apptDate || '';
+  $('cardioHolterDate').value = c.holterDate || '';
+  $('cardioTests').value = c.tests || '';
+  $('cardioGaps').value = c.gaps || '';
+  $('cardioQuestions').value = c.questions || '';
+
+  const saveCardio = () => {
+    state.cardio.apptDate = $('cardioApptDate').value;
+    state.cardio.holterDate = $('cardioHolterDate').value;
+    state.cardio.tests = $('cardioTests').value;
+    state.cardio.gaps = $('cardioGaps').value;
+    state.cardio.questions = $('cardioQuestions').value;
+    save();
+  };
+  $('cardioApptDate').oninput = saveCardio;
+  $('cardioHolterDate').oninput = saveCardio;
+  $('cardioTests').oninput = saveCardio;
+  $('cardioGaps').oninput = saveCardio;
+  $('cardioQuestions').oninput = saveCardio;
+}
+$('printCardio').onclick = () => {
+  const c = state.cardio;
+  let countdown = '';
+  if(c.apptDate){
+    const days = Math.round((new Date(c.apptDate) - Date.now()) / 86400000);
+    if(days >= 0) countdown = ` (in ${days} days)`;
+  }
+  
+  $('printArea').innerHTML = `<h1>Cardiology Appointment Summary</h1>
+    <p>Generated ${new Date().toLocaleString()}</p>
+    <h2>Patient Details</h2>
+    <p><strong>Appointment Date:</strong> ${escHtml(c.apptDate || 'Not set')}${countdown}<br>
+    <strong>Holter/HeartBug Dates:</strong> ${escHtml(c.holterDate || 'None')}</p>
+    
+    <h2>My Questions</h2>
+    <pre>${escHtml(c.questions || 'None')}</pre>
+    
+    <h2>Prior Testing Summary</h2>
+    <pre>${escHtml(c.tests || 'None')}</pre>
+    
+    <h2>Recording Gap Notes</h2>
+    <p><em>Symptoms experienced that were not captured on monitor:</em></p>
+    <pre>${escHtml(c.gaps || 'None')}</pre>
+    
+    <hr>
+    <h2>Appendix: Palpitation Log Summary</h2>
+    <pre>${escHtml(prepText())}</pre>`;
+  window.print();
+};
+
 /* Inline SVG trend chart — no external library (upgrade #1). */
 function barChart(data){
   const h = 120, pad = 18;
@@ -951,19 +1006,25 @@ function renderRes(){
 function bundle(){
   return { app:'heart-calm', v:1, exportedAt:new Date().toISOString(),
     logs:state.logs, care:state.care, reminders:state.reminders,
-    settings:state.settings, emergency:state.emergency };
+    settings:state.settings, emergency:state.emergency, cardio:state.cardio };
 }
 function applyBundle(b){
   if(!b || b.app !== 'heart-calm') throw new Error('Not a Calm backup file');
+  if(b.logs && !Array.isArray(b.logs)) throw new Error('Invalid backup: logs must be an array');
+  if(b.care && !Array.isArray(b.care)) throw new Error('Invalid backup: care must be an array');
+  if(b.reminders && !Array.isArray(b.reminders)) throw new Error('Invalid backup: reminders must be an array');
+  
   state.logs = Array.isArray(b.logs) ? b.logs : state.logs;
   state.care = Array.isArray(b.care) ? b.care : state.care;
   state.reminders = Array.isArray(b.reminders) ? b.reminders : state.reminders;
   state.settings = Object.assign({}, DEFAULT_SETTINGS, b.settings || {});
   state.emergency = Object.assign({}, DEFAULT_EMERGENCY, b.emergency || {});
+  state.cardio = Object.assign({}, DEFAULT_CARDIO, b.cardio || {});
   save();
   applyTheme(); renderAll();
 }
 $('exportData').onclick = () => {
+  if(!confirm('Exporting saves a file containing your sensitive health data. Keep it safe. Continue?')) return;
   downloadBlob(JSON.stringify(bundle(), null, 2), 'calm-backup.json', 'application/json');
 };
 $('importData').onclick = () => $('importFile').click();
@@ -1010,6 +1071,7 @@ $('exportEnc').onclick = async () => {
   if(!crypto.subtle){ toast('Encryption not available here'); return; }
   const pass = prompt('Choose a passphrase for this encrypted backup.\nYou will need it to restore — it cannot be recovered.');
   if(!pass){ return; }
+  if(!confirm('Exporting saves a file containing your sensitive health data. Keep it safe. Continue?')) return;
   try{
     const enc = await encryptData(bundle(), pass);
     downloadBlob(JSON.stringify(enc, null, 2), 'calm-backup.enc.json', 'application/json');
@@ -1026,6 +1088,7 @@ $('clearData').onclick = () => {
     state.reminders = JSON.parse(JSON.stringify(DEFAULT_REMINDERS));
     state.settings = Object.assign({}, DEFAULT_SETTINGS, { theme, onboarded:true });
     state.emergency = Object.assign({}, DEFAULT_EMERGENCY);
+    state.cardio = Object.assign({}, DEFAULT_CARDIO);
     save(); renderAll(); toast('Cleared');
   }
 };
@@ -1052,6 +1115,7 @@ export function t(key){ return (STRINGS[LANG] && STRINGS[LANG][key]) || STRINGS.
 function renderAll(){
   renderToday(); renderLogs(); renderReminders(); renderRes(); renderHydro();
   renderTrends(); renderCustomPatterns(); renderEmergencyForm(); renderEmergencyCard();
+  renderCardioForm();
   syncBreatheButtons(); stampLog(); renderTapState(); applyDim();
 }
 state.logs = normalizeLogs(state.logs); save(); // migrate old entries to the current schema

@@ -468,14 +468,27 @@
         <button class="btn sm" id="printPrep">🖨 Print</button>
       </div>
       <hr class="sep">
-      <h3>Questions to ask</h3>
-      <ul style="margin:0;padding-left:18px;font-size:.92rem">
-        <li>Can we do a 12-lead ECG?</li>
-        <li>Can we check FBC, electrolytes (incl. magnesium/calcium), kidney function, thyroid, iron/ferritin?</li>
-        <li>Should Holter / event monitoring be repeated or brought forward?</li>
-        <li>Could asthma, reflux, viral illness, medication, thyroid, anaemia or electrolytes be contributing?</li>
-        <li>Are there signs cardiology should be brought forward?</li>
-      </ul>
+      <h3>Cardiology Appointment Mode</h3>
+      <p class="dim" style="font-size:.85rem">Track your appointment, tests, and monitor dates.</p>
+      <div class="grid2">
+        <div class="field"><label>Appointment Date</label><input type="date" id="cardioApptDate"></div>
+        <div class="field"><label>Holter/HeartBug Date(s)</label><input type="text" id="cardioHolterDate" placeholder="e.g. 12 Oct - 19 Oct"></div>
+      </div>
+      <div class="field"><label>Prior testing summary (ECG, Echo, etc.)</label><textarea id="cardioTests" placeholder="e.g. Echo 2023: normal"></textarea></div>
+      <div class="field"><label>Recording gap notes (symptoms not caught on monitor)</label><textarea id="cardioGaps" placeholder="e.g. Felt skipped beats on Tuesday but didn't press button in time"></textarea></div>
+      <div class="field"><label>My questions to ask</label><textarea id="cardioQuestions" placeholder="e.g. Do I need to change my medication?"></textarea></div>
+      <button class="btn sm" id="printCardio" style="margin-top:8px">🖨 Print Cardiology Summary (One-page + Appendix)</button>
+
+      <details style="margin-top:12px">
+        <summary>Suggested questions</summary>
+        <ul style="margin:4px 0 0 0;padding-left:18px;font-size:.92rem">
+          <li>Can we do a 12-lead ECG?</li>
+          <li>Can we check FBC, electrolytes (incl. magnesium/calcium), kidney function, thyroid, iron/ferritin?</li>
+          <li>Should Holter / event monitoring be repeated or brought forward?</li>
+          <li>Could asthma, reflux, viral illness, medication, thyroid, anaemia or electrolytes be contributing?</li>
+          <li>Are there signs cardiology should be brought forward?</li>
+        </ul>
+      </details>
     </div>
 
     <div class="card">
